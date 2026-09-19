@@ -1,0 +1,350 @@
+{
+  "entities": {
+    "PlatformAdmin": {
+      "title": "PlatformAdmin",
+      "description": "Global Master Admin profile and permissions",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["MASTER_ADMIN"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "WorkspaceSlug": {
+      "title": "WorkspaceSlug",
+      "description": "Unique slug reservation index pointing to workspaceId",
+      "type": "object",
+      "properties": {
+        "slug": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["slug", "workspaceId"]
+    },
+    "Workspace": {
+      "title": "Workspace",
+      "description": "Tenant business workspace and trial subscription status",
+      "type": "object",
+      "properties": {
+        "workspaceId": { "type": "string" },
+        "workspaceSlug": { "type": "string" },
+        "workspaceName": { "type": "string" },
+        "ownerEmail": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "status": { "type": "string", "enum": ["ACTIVE", "TRIAL_ENDING", "EXPIRED", "GRACE_PERIOD", "SUSPENDED", "ARCHIVED"] },
+        "trialDurationDays": { "type": "number" },
+        "trialStartedAt": { "type": "string" },
+        "trialExpiresAt": { "type": "string" },
+        "gracePeriodDays": { "type": "number" },
+        "gracePeriodEndsAt": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["workspaceId", "workspaceSlug", "workspaceName", "ownerEmail", "status", "trialExpiresAt", "gracePeriodEndsAt"]
+    },
+    "WorkspaceMember": {
+      "title": "WorkspaceMember",
+      "description": "Tenant workspace user account and role binding",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["OWNER", "STAFF"] },
+        "status": { "type": "string", "enum": ["ACTIVE", "INVITED", "SUSPENDED", "REVOKED"] },
+        "joinedAt": { "type": "string" }
+      },
+      "required": ["uid", "workspaceId", "email", "role", "status"]
+    },
+    "Store": {
+      "title": "Store",
+      "description": "Store configuration, currency, and retail settings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "name": { "type": "string" },
+        "code": { "type": "string" },
+        "currency": { "type": "string" },
+        "tagline": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "receiptFooter": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "code", "currency"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Retail product catalog item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "storeId": { "type": "string" },
+        "sku": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "costPrice": { "type": "number" },
+        "sellingPrice": { "type": "number" },
+        "currentStock": { "type": "number" },
+        "minimumStock": { "type": "number" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "sku", "name", "costPrice", "sellingPrice", "currentStock", "active"]
+    },
+    "InventoryMovement": {
+      "title": "InventoryMovement",
+      "description": "Stock movement audit ledger record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "storeId": { "type": "string" },
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "type": { "type": "string", "enum": ["STOCK_IN", "SALE", "ADJUSTMENT", "RETURN"] },
+        "quantity": { "type": "number" },
+        "previousStock": { "type": "number" },
+        "newStock": { "type": "number" },
+        "reason": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "productId", "type", "quantity", "previousStock", "newStock", "reason", "createdAt"]
+    },
+    "Sale": {
+      "title": "Sale",
+      "description": "Completed POS checkout transaction and revenue record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "storeId": { "type": "string" },
+        "transactionNumber": { "type": "string" },
+        "dateTime": { "type": "string" },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "total": { "type": "number" },
+        "totalCost": { "type": "number" },
+        "grossProfit": { "type": "number" },
+        "status": { "type": "string", "enum": ["COMPLETED", "REFUNDED", "VOID"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "transactionNumber", "total", "totalCost", "grossProfit", "status"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Product vendor / supplier record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "supplierCode": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "supplierCode", "supplierName", "active"]
+    },
+    "Purchase": {
+      "title": "Purchase",
+      "description": "Purchase order and stock acquisition record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "purchaseNumber": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "supplierCodeSnapshot": { "type": "string" },
+        "supplierNameSnapshot": { "type": "string" },
+        "purchaseDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["DRAFT", "COMPLETED", "CANCELLED"] },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "total": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "purchaseNumber", "supplierId", "status", "total"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Store customer profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "customerCode": { "type": "string" },
+        "customerName": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "customerCode", "customerName", "active"]
+    },
+    "LoyaltyLedgerEntry": {
+      "title": "LoyaltyLedgerEntry",
+      "description": "Customer loyalty reward points ledger entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "customerId": { "type": "string" },
+        "points": { "type": "number" },
+        "type": { "type": "string", "enum": ["EARNED", "REDEEMED", "ADJUSTMENT"] },
+        "referenceId": { "type": "string" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "customerId", "points", "type", "referenceId", "createdAt"]
+    },
+    "StaffUser": {
+      "title": "StaffUser",
+      "description": "Store cashier or staff profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "role", "active"]
+    },
+    "WorkspaceAuthConfig": {
+      "title": "WorkspaceAuthConfig",
+      "description": "Tenant workspace PIN authentication configuration and hash",
+      "type": "object",
+      "properties": {
+        "workspaceId": { "type": "string" },
+        "workspaceSlug": { "type": "string" },
+        "pinHash": { "type": "string" },
+        "pinVersion": { "type": "number" },
+        "isPinEnabled": { "type": "boolean" },
+        "mustChangeDefaultPin": { "type": "boolean" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["workspaceId", "pinHash", "pinVersion", "isPinEnabled", "mustChangeDefaultPin", "updatedAt", "updatedBy"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Security and administrative audit trail",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "action": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "workspaceSlug": { "type": "string" },
+        "performedBy": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "details": { "type": "object" }
+      },
+      "required": ["id", "action", "workspaceId", "performedBy", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/system/{docId}": {
+      "description": "System health and connection check documents"
+    },
+    "/stores/{storeId}": {
+      "schema": "Store",
+      "description": "Root store configuration document"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Root product catalog items"
+    },
+    "/inventory_movements/{movementId}": {
+      "schema": "InventoryMovement",
+      "description": "Root inventory movements audit ledger"
+    },
+    "/sales/{saleId}": {
+      "schema": "Sale",
+      "description": "Root sales checkout transactions"
+    },
+    "/suppliers/{supplierId}": {
+      "schema": "Supplier",
+      "description": "Root suppliers directory"
+    },
+    "/purchases/{purchaseId}": {
+      "schema": "Purchase",
+      "description": "Root purchases and restock records"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Root customer directory"
+    },
+    "/loyalty_ledger/{ledgerId}": {
+      "schema": "LoyaltyLedgerEntry",
+      "description": "Root customer loyalty points ledger"
+    },
+    "/staff_users/{staffId}": {
+      "schema": "StaffUser",
+      "description": "Root staff accounts and cashier directory"
+    },
+    "/platform_admins/{adminUid}": {
+      "schema": "PlatformAdmin",
+      "description": "Platform Master Admin directory"
+    },
+    "/workspace_slugs/{slug}": {
+      "schema": "WorkspaceSlug",
+      "description": "Unique workspace URL slug mapping"
+    },
+    "/workspaces/{workspaceId}": {
+      "schema": "Workspace",
+      "description": "Tenant business workspace and 30-day trial status"
+    },
+    "/workspaces/{workspaceId}/members/{memberUid}": {
+      "schema": "WorkspaceMember",
+      "description": "Workspace member roles and permissions"
+    },
+    "/workspaces/{workspaceId}/store/{configDoc}": {
+      "schema": "Store",
+      "description": "Tenant store settings and profile"
+    },
+    "/workspaces/{workspaceId}/products/{productId}": {
+      "schema": "Product",
+      "description": "Tenant product catalog"
+    },
+    "/workspaces/{workspaceId}/inventory_movements/{movementId}": {
+      "schema": "InventoryMovement",
+      "description": "Tenant stock movement audit trail"
+    },
+    "/workspaces/{workspaceId}/sales/{saleId}": {
+      "schema": "Sale",
+      "description": "Tenant POS checkout sales transactions"
+    },
+    "/workspaces/{workspaceId}/suppliers/{supplierId}": {
+      "schema": "Supplier",
+      "description": "Tenant supplier records (Confidential to Owner)"
+    },
+    "/workspaces/{workspaceId}/purchases/{purchaseId}": {
+      "schema": "Purchase",
+      "description": "Tenant purchase orders and wholesale cost records (Confidential to Owner)"
+    },
+    "/workspaces/{workspaceId}/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Tenant customer records"
+    },
+    "/workspaces/{workspaceId}/loyalty_ledger/{ledgerId}": {
+      "schema": "LoyaltyLedgerEntry",
+      "description": "Tenant loyalty points history"
+    },
+    "/workspace_auth/{workspaceId}": {
+      "schema": "WorkspaceAuthConfig",
+      "description": "Server-managed PIN hashes and authentication configuration (strictly non-public)"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Administrative action and PIN reset audit trail"
+    }
+  }
+}

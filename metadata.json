@@ -1,0 +1,6 @@
+{
+  "name": "NiagaPOS",
+  "description": "Retail & Restaurant POS Management System with interactive 6-status Table Grid, Reservation Alerts, Dine-in/Takeaway workflow, Menu Variants & Modifiers, and Multi-tenant isolation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

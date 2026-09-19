@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ----------------------------------------------------
+    // SYSTEM & HEALTH CHECK
+    // ----------------------------------------------------
+    match /system/{docId} {
+      allow read, write: if true;
+    }
+
+    // ----------------------------------------------------
+    // NIAGAPOS ROOT STORE & POS COLLECTIONS (REAL-TIME SYNC)
+    // ----------------------------------------------------
+    match /stores/{storeId} {
+      allow read, write: if true;
+    }
+
+    match /products/{productId} {
+      allow read, write: if true;
+    }
+
+    match /inventory_movements/{movementId} {
+      allow read, write: if true;
+    }
+
+    match /sales/{saleId} {
+      allow read, write: if true;
+    }
+
+    match /suppliers/{supplierId} {
+      allow read, write: if true;
+    }
+
+    match /purchases/{purchaseId} {
+      allow read, write: if true;
+    }
+
+    match /customers/{customerId} {
+      allow read, write: if true;
+    }
+
+    match /loyalty_ledger/{ledgerId} {
+      allow read, write: if true;
+    }
+
+    match /staff_users/{staffId} {
+      allow read, write: if true;
+    }
+
+    // ----------------------------------------------------
+    // MULTI-TENANT WORKSPACES & PLATFORM DIRECTORY
+    // ----------------------------------------------------
+    match /platform_admins/{adminUid} {
+      allow read, write: if true;
+    }
+
+    match /workspace_slugs/{slug} {
+      allow read, write: if true;
+    }
+
+    // ----------------------------------------------------
+    // AUTHENTICATION & SECURITY (SERVER-ONLY RESTRICTION)
+    // ----------------------------------------------------
+    // Strictly prevent client web SDK from reading or writing PIN hashes and auth configs
+    match /workspace_auth/{workspaceId} {
+      allow read, write: if false;
+    }
+
+    // Strictly prevent tampering with administrative audit logs
+    match /audit_logs/{logId} {
+      allow read, write: if false;
+    }
+
+    match /workspaces/{workspaceId} {
+      allow read, write: if true;
+
+      match /{subcollection=**} {
+        allow read, write: if true;
+      }
+    }
+  }
+}

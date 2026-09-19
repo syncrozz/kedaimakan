@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
+    <!-- Authoritative Single Source of Truth for NiagaPOS Branding:
+         https://github.com/syncrozz/syncrozz-assets/tree/main/logo/NiagaPOS -->
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/svg+xml" href="https://raw.githubusercontent.com/syncrozz/syncrozz-assets/main/logo/NiagaPOS/favicon.svg" />
+    <link rel="alternate icon" href="https://raw.githubusercontent.com/syncrozz/syncrozz-assets/main/logo/NiagaPOS/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="96x96" href="https://raw.githubusercontent.com/syncrozz/syncrozz-assets/main/logo/NiagaPOS/favicon-96x96.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="https://raw.githubusercontent.com/syncrozz/syncrozz-assets/main/logo/NiagaPOS/favicon-48x48.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/syncrozz/syncrozz-assets/main/logo/NiagaPOS/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="https://raw.githubusercontent.com/syncrozz/syncrozz-assets/main/logo/NiagaPOS/favicon-16x16.png" />
+
+    <!-- Apple Touch Icon & iOS / Android PWA -->
+    <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/syncrozz/syncrozz-assets/main/logo/NiagaPOS/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="https://raw.githubusercontent.com/syncrozz/syncrozz-assets/main/logo/NiagaPOS/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta id="apple-app-title-meta" name="apple-mobile-web-app-title" content="NiagaPOS" />
+
+    <!-- PWA Web App Manifest (Dynamically workspace-aware) -->
+    <link id="app-manifest-link" rel="manifest" href="/site.webmanifest" />
+
+    <!-- Instant Workspace PWA Link Resolver for Android & iOS -->
+    <script>
+      (function() {
+        try {
+          var path = window.location.pathname || '';
+          var segs = path.split('/').map(function(s) { return s.trim(); }).filter(Boolean);
+          var reserved = ['admin','api','assets','login','pos','settings','inventory','reports','customers','suppliers','purchases','dashboard','setup','sw.js','konsol','klien','clients','manifest.json','site.webmanifest'];
+          if (segs.length > 0) {
+            var first = segs[0].toLowerCase();
+            if (first.indexOf('.') === -1 && reserved.indexOf(first) === -1) {
+              var manifestLink = document.getElementById('app-manifest-link');
+              if (manifestLink) {
+                manifestLink.href = '/site.webmanifest?slug=' + encodeURIComponent(first);
+              }
+              var words = first.split('-');
+              for (var i = 0; i < words.length; i++) {
+                if (words[i].length > 0) {
+                  words[i] = words[i].charAt(0).toUpperCase() + words[i].slice(1);
+                }
+              }
+              var cleanName = words.join(' ');
+              var appleMeta = document.getElementById('apple-app-title-meta');
+              if (appleMeta) {
+                appleMeta.content = cleanName;
+              }
+              var appNameMeta = document.getElementById('app-name-meta');
+              if (appNameMeta) {
+                appNameMeta.content = cleanName;
+              }
+              document.title = cleanName + ' — NiagaPOS';
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- Windows / Microsoft Tiles -->
+    <meta name="msapplication-TileColor" content="#082f63" />
+    <meta name="msapplication-TileImage" content="https://raw.githubusercontent.com/syncrozz/syncrozz-assets/main/logo/NiagaPOS/mstile-150x150.png" />
+    <meta name="theme-color" content="#082f63" />
+    <meta id="app-name-meta" name="application-name" content="NiagaPOS" />
+
+    <!-- Title & SEO Metadata -->
+    <title>NiagaPOS</title>
+    <meta name="description" content="Retail POS & Inventory Management System for NiagaPOS with purchasing, supplier management, inventory movement, sales, and gross profit tracking." />
+
+    <!-- Open Graph / Social Sharing -->
+    <meta property="og:title" content="NiagaPOS" />
+    <meta property="og:description" content="Retail POS & Inventory Management System for NiagaPOS with purchasing, supplier management, inventory movement, sales, and gross profit tracking." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://raw.githubusercontent.com/syncrozz/syncrozz-assets/main/logo/NiagaPOS/web-app-manifest-512x512.png" />
+
+    <!-- Twitter Cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="NiagaPOS" />
+    <meta name="twitter:description" content="Retail POS & Inventory Management System for NiagaPOS with purchasing, supplier management, inventory movement, sales, and gross profit tracking." />
+    <meta name="twitter:image" content="https://raw.githubusercontent.com/syncrozz/syncrozz-assets/main/logo/NiagaPOS/web-app-manifest-512x512.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
