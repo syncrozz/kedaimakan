@@ -42,7 +42,11 @@ import { formatCurrency } from '../../services/formatters';
 import { AdminAuthService } from '../../services/adminAuthService';
 import { pushRoute } from '../../services/urlRouter';
 import { KotService } from '../../services/kotService';
-import { LayoutGrid, Layers, PlusCircle, ChefHat } from 'lucide-react';
+import { LayoutGrid, Layers, PlusCircle, ChefHat, ShieldAlert, Download, UploadCloud } from 'lucide-react';
+import { DuplicateAuditModal } from '../common/DuplicateAuditModal';
+import { DuplicateAuditService, DuplicateGroup } from '../../services/duplicateAuditService';
+import { RestaurantCsvService } from '../../services/restaurantCsvService';
+import { RestaurantCsvImportModal } from '../menu/RestaurantCsvImportModal';
 
 export const RestaurantPosView: React.FC = () => {
   const {
@@ -63,6 +67,7 @@ export const RestaurantPosView: React.FC = () => {
     deleteTableDefinition,
     addTableReservation,
     refreshTablesData,
+    refreshMenuData,
     businessConfig,
   } = useStore();
 
@@ -74,6 +79,13 @@ export const RestaurantPosView: React.FC = () => {
   const [activeRestaurantTab, setActiveRestaurantTab] = useState<'TABLES' | 'MENU'>(() => {
     return businessConfig?.tableMode === 'DISABLED' ? 'MENU' : 'TABLES';
   });
+
+  // Duplicate Audit & CSV Import states (SES v4.5)
+  const [isDuplicateAuditOpen, setIsDuplicateAuditOpen] = useState(false);
+  const [auditGroups, setAuditGroups] = useState<DuplicateGroup<any>[]>([]);
+  const [auditTitle, setAuditTitle] = useState<string>('Rekod');
+  const [auditType, setAuditType] = useState<'TABLE' | 'MENU_ITEM'>('TABLE');
+  const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
 
   // Restaurant Order Header State
   const [orderType, setOrderType] = useState<RestaurantOrderType>('DINE_IN');
@@ -451,32 +463,16 @@ export const RestaurantPosView: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      {/* Header POS Restoran */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-stone-900 border border-stone-800 p-4 rounded-2xl">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <UtensilsCrossed className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-white tracking-tight">
-                POS Restoran
-              </h1>
-            </div>
-            <p className="text-xs text-stone-400 mt-0.5">
-              Table Management, Amaran Tempahan, Dine-in, Bungkus, &amp; Menu.
-            </p>
-          </div>
-        </div>
-
-        {/* Tab Penukar: Grid Meja (Laluan Utama) vs Menu & Pesanan */}
+      {/* Bar Alat POS Restoran & Penukar Tab (SES v4.5) */}
+      <div className="flex items-center justify-between gap-2.5 bg-stone-900 border border-stone-800 p-2.5 sm:p-3 rounded-2xl flex-wrap">
+        {/* Navigation Mode Switcher & KDS */}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center p-1 bg-stone-950 rounded-xl border border-stone-800">
             <button
               type="button"
               id="restaurant-tab-tables-btn"
               onClick={() => setActiveRestaurantTab('TABLES')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                 activeRestaurantTab === 'TABLES'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-stone-400 hover:text-stone-200'
@@ -489,7 +485,7 @@ export const RestaurantPosView: React.FC = () => {
               type="button"
               id="restaurant-tab-menu-btn"
               onClick={() => setActiveRestaurantTab('MENU')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                 activeRestaurantTab === 'MENU'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-stone-400 hover:text-stone-200'
@@ -512,26 +508,87 @@ export const RestaurantPosView: React.FC = () => {
             <ChefHat className="w-4 h-4" />
             <span>Dapur</span>
           </button>
+        </div>
 
+        {/* SES v4.5 Standardized Actions: [Audit Duplikasi] -> [Eksport CSV] -> [Import CSV] -> [Tambah Baharu] */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* 1. Audit Duplikasi */}
           <button
             type="button"
-            id="add-table-definition-btn"
-            onClick={() => setIsAddTableModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 transition"
+            id="restaurant-audit-duplikasi-btn"
+            onClick={() => {
+              if (activeRestaurantTab === 'TABLES') {
+                const groups = DuplicateAuditService.auditTables(tables);
+                setAuditGroups(groups);
+                setAuditTitle('Meja Restoran');
+                setAuditType('TABLE');
+              } else {
+                const groups = DuplicateAuditService.auditMenuItems(menuItems);
+                setAuditGroups(groups);
+                setAuditTitle('Menu Restoran');
+                setAuditType('MENU_ITEM');
+              }
+              setIsDuplicateAuditOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-stone-800/80 hover:bg-amber-950/40 text-amber-300 border border-amber-500/30 transition cursor-pointer"
+            title="Audit Duplikasi (SES v4.5)"
           >
-            <PlusCircle className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Meja</span>
+            <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Audit Duplikasi</span>
           </button>
 
+          {/* 2. Eksport CSV */}
           <button
             type="button"
-            id="open-menu-management-btn"
-            onClick={() => setIsMenuManagementOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 transition"
+            id="restaurant-export-csv-btn"
+            onClick={() => {
+              if (activeRestaurantTab === 'TABLES') {
+                RestaurantCsvService.exportTablesToCsv(tables, activeWorkspaceSlug);
+              } else {
+                RestaurantCsvService.exportMenuToCsv(menuItems, activeWorkspaceSlug);
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-stone-800/80 hover:bg-stone-700 text-stone-300 hover:text-white border border-stone-700 transition cursor-pointer"
+            title="Eksport CSV"
           >
-            <Settings className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Menu ({menuItems.length})</span>
+            <Download className="w-3.5 h-3.5 text-sky-400" />
+            <span className="hidden sm:inline">Eksport CSV</span>
           </button>
+
+          {/* 3. Import CSV */}
+          <button
+            type="button"
+            id="restaurant-import-csv-btn"
+            onClick={() => setIsCsvImportOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-stone-800/80 hover:bg-stone-700 text-stone-300 hover:text-white border border-stone-700 transition cursor-pointer"
+            title="Import Menu CSV"
+          >
+            <UploadCloud className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">Import CSV</span>
+          </button>
+
+          {/* 4. Tambah Baharu */}
+          {activeRestaurantTab === 'TABLES' ? (
+            <button
+              type="button"
+              id="add-table-definition-btn"
+              onClick={() => setIsAddTableModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-xs cursor-pointer"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>Tambah Meja</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              id="open-menu-management-btn"
+              onClick={() => setIsMenuManagementOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-xs cursor-pointer"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>Tambah Menu</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -983,6 +1040,7 @@ export const RestaurantPosView: React.FC = () => {
         onSaveItem={saveMenuItem}
         onDeleteItem={deleteMenuItem}
         onToggleAvailability={toggleMenuItemAvailability}
+        onRefreshMenu={refreshMenuData}
       />
 
       {/* Modal Pengesahan Kejayaan Pesanan Selesai */}
@@ -1087,6 +1145,25 @@ export const RestaurantPosView: React.FC = () => {
         onSaveTable={(tableData) => {
           saveTableDefinition(tableData);
           setIsAddTableModalOpen(false);
+        }}
+      />
+
+      {/* Modal Audit Duplikasi (SES v4.5) */}
+      <DuplicateAuditModal
+        isOpen={isDuplicateAuditOpen}
+        onClose={() => setIsDuplicateAuditOpen(false)}
+        entityTitle={auditTitle}
+        entityType={auditType}
+        auditGroups={auditGroups}
+      />
+
+      {/* Modal Import CSV Menu Restoran (SES v4.5) */}
+      <RestaurantCsvImportModal
+        isOpen={isCsvImportOpen}
+        onClose={() => setIsCsvImportOpen(false)}
+        workspaceSlug={activeWorkspaceSlug}
+        onImportSuccess={() => {
+          refreshMenuData();
         }}
       />
     </div>

@@ -49,6 +49,25 @@ service cloud.firestore {
     }
 
     // ----------------------------------------------------
+    // RESTAURANT DOMAIN (SES v4.5 REAL-TIME SYNC)
+    // ----------------------------------------------------
+    match /restaurant_menus/{itemId} {
+      allow read, write: if true;
+    }
+
+    match /restaurant_tables/{tableId} {
+      allow read, write: if true;
+    }
+
+    match /restaurant_reservations/{reservationId} {
+      allow read, write: if true;
+    }
+
+    match /restaurant_tax_configs/{configId} {
+      allow read, write: if true;
+    }
+
+    // ----------------------------------------------------
     // MULTI-TENANT WORKSPACES & PLATFORM DIRECTORY
     // ----------------------------------------------------
     match /platform_admins/{adminUid} {

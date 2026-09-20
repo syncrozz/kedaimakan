@@ -18,7 +18,7 @@
 import { MenuItem, MenuVariant, MenuModifierGroup, KitchenStation, RestaurantTable } from '../types/restaurant';
 import { MenuService } from './menuService';
 import { CsvService } from './csvService';
-import { getLocalDateString } from '../utils/dateUtils';
+import { getLocalDateString } from './formatters';
 
 export interface ParsedCsvMenuItem {
   rowNumber: number;
@@ -120,8 +120,7 @@ export class RestaurantCsvService {
       'Zone',
       'Capacity',
       'Status',
-      'QR Code Identifier',
-      'Active Status',
+      'Last Updated',
     ];
 
     const rows = tables.map((t) => [
@@ -129,8 +128,7 @@ export class RestaurantCsvService {
       t.zone || 'Utama',
       t.capacity.toString(),
       t.status,
-      t.qrCode || '',
-      t.isActive !== false ? 'ACTIVE' : 'INACTIVE',
+      t.updatedAt || '',
     ]);
 
     const dateStr = getLocalDateString();
@@ -272,6 +270,8 @@ export class RestaurantCsvService {
         validRows: 0,
         invalidRows: 0,
         duplicateCount: 0,
+        duplicatesInDbCount: 0,
+        duplicatesInFileCount: 0,
         parsedItems: [],
         globalErrors: ['Fail CSV kosong atau tidak mengandungi sebarang data.'],
       };
@@ -298,6 +298,8 @@ export class RestaurantCsvService {
         validRows: 0,
         invalidRows: lines.length - 1,
         duplicateCount: 0,
+        duplicatesInDbCount: 0,
+        duplicatesInFileCount: 0,
         parsedItems: [],
         globalErrors,
       };
@@ -318,6 +320,8 @@ export class RestaurantCsvService {
 
     const parsedItems: ParsedCsvMenuItem[] = [];
     let duplicateCount = 0;
+    let duplicatesInDbCount = 0;
+    let duplicatesInFileCount = 0;
 
     for (let i = 1; i < lines.length; i++) {
       const rowNumber = i + 1;

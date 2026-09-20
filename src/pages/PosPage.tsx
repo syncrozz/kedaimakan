@@ -578,17 +578,10 @@ export const PosPage: React.FC = () => {
     <div className="space-y-4">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-stone-900 tracking-tight">
-              {posMode === 'RESTAURANT' ? 'POS Restoran' : 'POS Runcit & Barcode'}
-            </h1>
-          </div>
-          <p className="text-xs text-stone-500 mt-0.5">
-            {posMode === 'RESTAURANT'
-              ? 'Pengurusan Menu, Dine-in/Bungkus, Variasi Hidangan, & Diskaun Item dengan PIN Owner.'
-              : 'Real-time retail register, Price snapshotting, cash tender, atomic stock deductions.'}
-          </p>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">
+            {posMode === 'RESTAURANT' ? 'POS Restoran' : 'POS Runcit & Barcode'}
+          </h1>
         </div>
 
         {/* Switcher Antara Mod Restoran & Mod Runcit (Data Lama Kekal Terpelihara) */}
@@ -618,7 +611,7 @@ export const PosPage: React.FC = () => {
               }`}
             >
               <Barcode className="w-3.5 h-3.5" />
-              <span>Runcit Lama</span>
+              <span>POS Runcit</span>
             </button>
           </div>
           {store.settings?.enableStaff !== false && activeCashiers.length > 0 ? (

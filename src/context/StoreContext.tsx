@@ -206,6 +206,7 @@ interface StoreContextType {
     newStatus: 'SEATED' | 'CANCELLED' | 'NO_SHOW'
   ) => void;
   refreshTablesData: () => void;
+  refreshMenuData: () => void;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -396,6 +397,43 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return StorageService.safeGet<LastCatalogSyncInfo | null>(STORAGE_KEYS.LAST_SYNC_METADATA, null);
   });
 
+  // SYNCROZZ KEDAI MAKAN - State Declarations (SES v4.5)
+  const [businessConfig, setBusinessConfig] = useState<BusinessConfiguration>(() => {
+    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+    const slug = currentRoute.workspaceSlug || 'default';
+    return TemplateService.getBusinessConfig(slug);
+  });
+
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(() => {
+    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+    const slug = currentRoute.workspaceSlug || 'default';
+    return MenuService.getMenuItems(slug);
+  });
+
+  const [taxConfig, setTaxConfig] = useState<RestaurantTaxConfig>(() => {
+    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+    const slug = currentRoute.workspaceSlug || 'default';
+    return MenuService.getTaxConfig(slug);
+  });
+
+  const [tables, setTables] = useState<RestaurantTable[]>(() => {
+    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+    const slug = currentRoute.workspaceSlug || 'default';
+    return TableService.getTables(slug);
+  });
+
+  const [reservations, setReservations] = useState<TableReservation[]>(() => {
+    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+    const slug = currentRoute.workspaceSlug || 'default';
+    return TableService.getReservations(slug);
+  });
+
+  const [tableAuditLogs, setTableAuditLogs] = useState<TableStatusAuditEntry[]>(() => {
+    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+    const slug = currentRoute.workspaceSlug || 'default';
+    return TableService.getAuditEntries(slug);
+  });
+
   const [isLoading, setIsLoading] = useState(false);
 
   // Synchronized refs to eliminate race conditions and stale closures
@@ -523,6 +561,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setStaffUsers(sanitized);
         StorageService.safeSet(STORAGE_KEYS.STAFF, sanitized);
       }
+
+      // Sync Restaurant Domain from Cloud
+      const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+      const slug = currentRoute.workspaceSlug || 'default';
+      const restData = await FirebaseService.fetchRestaurantDataFromCloud(slug);
+      if (restData.menuItems && restData.menuItems.length > 0) {
+        setMenuItems(restData.menuItems);
+        MenuService.saveMenuItems(restData.menuItems, slug);
+      }
+      if (restData.tables && restData.tables.length > 0) {
+        setTables(restData.tables);
+        TableService.saveTables(restData.tables, slug);
+      }
+      if (restData.reservations && restData.reservations.length > 0) {
+        setReservations(restData.reservations);
+        TableService.saveReservations(restData.reservations, slug);
+      }
+      if (restData.taxConfig) {
+        setTaxConfig(restData.taxConfig);
+        MenuService.saveTaxConfig(restData.taxConfig, slug);
+      }
+
       setLastCloudSync(new Date());
       return true;
     } catch (err) {
@@ -546,6 +606,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         loyaltyLedger,
         staffUsers,
       });
+
+      const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+      const slug = currentRoute.workspaceSlug || 'default';
+      if (menuItems.length > 0) await FirebaseService.syncMenuItemsBatch(slug, menuItems);
+      if (tables.length > 0) await FirebaseService.syncTablesBatch(slug, tables);
+      if (reservations.length > 0) await FirebaseService.syncReservationsBatch(slug, reservations);
+      if (taxConfig) await FirebaseService.syncTaxConfig(slug, taxConfig);
+
       setCloudSyncStatus('CONNECTED');
       setLastCloudSync(new Date());
     } catch (err) {
@@ -558,6 +626,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     isMountedRef.current = true;
     let unsubStatus: (() => void) | undefined;
     let unsubRealtime: (() => void) | undefined;
+    let unsubRestaurantRealtime: (() => void) | undefined;
 
     async function initCloudSync() {
       unsubStatus = FirebaseService.onStatusChange((status, lastSynced) => {
@@ -580,6 +649,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         customers,
         loyaltyLedger,
         staffUsers,
+      });
+
+      const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+      const slug = currentRoute.workspaceSlug || 'default';
+
+      // Bootstrap restaurant collections if missing
+      await FirebaseService.bootstrapRestaurantCollections(slug, {
+        menuItems: MenuService.getMenuItems(slug),
+        tables: TableService.getTables(slug),
+        reservations: TableService.getReservations(slug),
+        taxConfig: MenuService.getTaxConfig(slug),
       });
 
       // 3. Immediately pull latest authoritative data from Firestore
@@ -687,6 +767,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           StorageService.safeSet(STORAGE_KEYS.STORE, remoteStore);
         },
       });
+
+      // 5. Restaurant Domain Real-time Listener (SES v4.5)
+      unsubRestaurantRealtime = FirebaseService.subscribeToRestaurantRealtime(slug, {
+        onMenuUpdated: (remoteMenu) => {
+          if (!isMountedRef.current || !remoteMenu) return;
+          setMenuItems(remoteMenu);
+          MenuService.saveMenuItems(remoteMenu, slug);
+        },
+        onTablesUpdated: (remoteTables) => {
+          if (!isMountedRef.current || !remoteTables) return;
+          setTables(remoteTables);
+          TableService.saveTables(remoteTables, slug);
+        },
+        onReservationsUpdated: (remoteRes) => {
+          if (!isMountedRef.current || !remoteRes) return;
+          setReservations(remoteRes);
+          TableService.saveReservations(remoteRes, slug);
+        },
+        onTaxConfigUpdated: (remoteTax) => {
+          if (!isMountedRef.current || !remoteTax) return;
+          setTaxConfig(remoteTax);
+          MenuService.saveTaxConfig(remoteTax, slug);
+        },
+      });
     }
 
     initCloudSync();
@@ -706,6 +810,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       window.removeEventListener('focus', handleVisibilityChange);
       if (unsubStatus) unsubStatus();
       if (unsubRealtime) unsubRealtime();
+      if (unsubRestaurantRealtime) unsubRestaurantRealtime();
       FirebaseService.unsubscribeAll();
     };
   }, []);
@@ -2029,7 +2134,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const exportStoreData = (): StoreBackupPayload => {
-    return StorageService.createBackupPayload({
+    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+    const slug = currentRoute.workspaceSlug || 'default';
+    const payload = StorageService.createBackupPayload({
       store,
       products,
       movements,
@@ -2040,6 +2147,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       loyaltyLedger,
       staffUsers,
     });
+    return {
+      ...payload,
+      workspaceSlug: slug,
+      menuItems,
+      tables,
+      reservations,
+      taxConfig,
+      businessConfig,
+      manifest: {
+        ...payload.manifest!,
+        workspaceSlug: slug,
+        menuItemsCount: menuItems.length,
+        tablesCount: tables.length,
+      },
+    };
   };
 
   const downloadBackup = (): void => {
@@ -2066,6 +2188,34 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setActiveStaff(StaffService.getActiveCashiers(data.staffUsers)[0] || null);
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_CASHIER_ID);
 
+    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+    const slug = currentRoute.workspaceSlug || 'default';
+
+    if (payload.menuItems && Array.isArray(payload.menuItems)) {
+      setMenuItems(payload.menuItems);
+      MenuService.saveMenuItems(payload.menuItems, slug);
+      FirebaseService.syncMenuItemsBatch(slug, payload.menuItems);
+    }
+    if (payload.tables && Array.isArray(payload.tables)) {
+      setTables(payload.tables);
+      TableService.saveTables(payload.tables, slug);
+      FirebaseService.syncTablesBatch(slug, payload.tables);
+    }
+    if (payload.reservations && Array.isArray(payload.reservations)) {
+      setReservations(payload.reservations);
+      TableService.saveReservations(payload.reservations, slug);
+      FirebaseService.syncReservationsBatch(slug, payload.reservations);
+    }
+    if (payload.taxConfig) {
+      setTaxConfig(payload.taxConfig);
+      MenuService.saveTaxConfig(payload.taxConfig, slug);
+      FirebaseService.syncTaxConfig(slug, payload.taxConfig);
+    }
+    if (payload.businessConfig) {
+      setBusinessConfig(payload.businessConfig);
+      TemplateService.saveBusinessConfig(payload.businessConfig, slug);
+    }
+
     FirebaseService.syncAllData({
       store: data.store,
       products: data.products,
@@ -2080,29 +2230,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     return {
       success: true,
-      message: `Store data successfully restored from backup (${data.products.length} products, ${data.sales.length} sales, ${data.purchases.length} purchases).`,
+      message: `Store data successfully restored from backup (${data.products.length} products, ${data.sales.length} sales, ${data.purchases.length} purchases, ${payload.menuItems?.length || 0} menu items, ${payload.tables?.length || 0} tables).`,
     };
   };
-
-  // SYNCROZZ KEDAI MAKAN - Business Configuration State (SES v4.5)
-  const [businessConfig, setBusinessConfig] = useState<BusinessConfiguration>(() => {
-    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
-    const slug = currentRoute.workspaceSlug || 'default';
-    return TemplateService.getBusinessConfig(slug);
-  });
-
-  // SYNCROZZ KEDAI MAKAN - Restaurant Menu & Tax Operations (Fasa 2 - SES v4.5)
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(() => {
-    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
-    const slug = currentRoute.workspaceSlug || 'default';
-    return MenuService.getMenuItems(slug);
-  });
-
-  const [taxConfig, setTaxConfig] = useState<RestaurantTaxConfig>(() => {
-    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
-    const slug = currentRoute.workspaceSlug || 'default';
-    return MenuService.getTaxConfig(slug);
-  });
 
   const updateBusinessConfig = (newConfig: BusinessConfiguration) => {
     const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
@@ -2119,7 +2249,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const slug = currentRoute.workspaceSlug || 'default';
     const res = TemplateService.applyTemplate(templateId, slug, options);
     setBusinessConfig(res.config);
-    setMenuItems(MenuService.getMenuItems(slug));
+    const updatedMenu = MenuService.getMenuItems(slug);
+    setMenuItems(updatedMenu);
+    FirebaseService.syncMenuItemsBatch(slug, updatedMenu);
+    const updatedTables = TableService.getTables(slug);
+    setTables(updatedTables);
+    FirebaseService.syncTablesBatch(slug, updatedTables);
   };
 
   const refreshBusinessConfig = () => {
@@ -2152,6 +2287,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const slug = currentRoute.workspaceSlug || 'default';
     const updated = MenuService.toggleAvailability(menuItemId, slug);
     setMenuItems(updated);
+    const item = updated.find((m) => m.id === menuItemId);
+    if (item) {
+      FirebaseService.syncMenuItem(slug, item);
+    }
   };
 
   const saveMenuItem = (itemData: Partial<MenuItem> & { name: string; price: number; category: string }) => {
@@ -2159,6 +2298,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const slug = currentRoute.workspaceSlug || 'default';
     const updated = MenuService.saveMenuItem(itemData, slug);
     setMenuItems(updated);
+    const item = itemData.id
+      ? updated.find((m) => m.id === itemData.id)
+      : updated.find((m) => m.name === itemData.name);
+    if (item) {
+      FirebaseService.syncMenuItem(slug, item);
+    }
   };
 
   const deleteMenuItem = (menuItemId: string) => {
@@ -2166,6 +2311,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const slug = currentRoute.workspaceSlug || 'default';
     const updated = MenuService.deleteMenuItem(menuItemId, slug);
     setMenuItems(updated);
+    FirebaseService.deleteMenuItemFromCloud(slug, menuItemId);
   };
 
   const updateTaxConfig = (config: RestaurantTaxConfig) => {
@@ -2173,26 +2319,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const slug = currentRoute.workspaceSlug || 'default';
     MenuService.saveTaxConfig(config, slug);
     setTaxConfig(config);
+    FirebaseService.syncTaxConfig(slug, config);
   };
-
-  // SYNCROZZ KEDAI MAKAN - Table Management & Reservation (Fasa 3 - Langkah 1)
-  const [tables, setTables] = useState<RestaurantTable[]>(() => {
-    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
-    const slug = currentRoute.workspaceSlug || 'default';
-    return TableService.getTables(slug);
-  });
-
-  const [reservations, setReservations] = useState<TableReservation[]>(() => {
-    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
-    const slug = currentRoute.workspaceSlug || 'default';
-    return TableService.getReservations(slug);
-  });
-
-  const [tableAuditLogs, setTableAuditLogs] = useState<TableStatusAuditEntry[]>(() => {
-    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
-    const slug = currentRoute.workspaceSlug || 'default';
-    return TableService.getAuditEntries(slug);
-  });
 
   const refreshTablesData = useCallback(() => {
     const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
@@ -2200,6 +2328,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setTables(TableService.getTables(slug));
     setReservations(TableService.getReservations(slug));
     setTableAuditLogs(TableService.getAuditEntries(slug));
+  }, []);
+
+  const refreshMenuData = useCallback(() => {
+    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+    const slug = currentRoute.workspaceSlug || 'default';
+    const updated = MenuService.getMenuItems(slug);
+    setMenuItems(updated);
+    FirebaseService.syncMenuItemsBatch(slug, updated);
   }, []);
 
   const updateTableStatus = (
@@ -2221,6 +2357,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     );
     setTables(res.tables);
     setTableAuditLogs(TableService.getAuditEntries(slug));
+    const targetTable = res.tables.find((t) => t.id === tableId);
+    if (targetTable) {
+      FirebaseService.syncTable(slug, targetTable);
+    }
   };
 
   const bindActiveOrderToTable = (tableNumber: string, orderSummary: RestaurantActiveOrderSummary) => {
@@ -2230,6 +2370,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const updated = TableService.bindActiveOrderToTable(tableNumber, orderSummary, operator, slug);
     setTables(updated);
     setTableAuditLogs(TableService.getAuditEntries(slug));
+    const targetTable = updated.find((t) => t.tableNumber === tableNumber);
+    if (targetTable) {
+      FirebaseService.syncTable(slug, targetTable);
+    }
   };
 
   const saveTableDefinition = (
@@ -2239,6 +2383,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const slug = currentRoute.workspaceSlug || 'default';
     const updated = TableService.saveTableDefinition(tableData, slug);
     setTables(updated);
+    const targetTable = tableData.id
+      ? updated.find((t) => t.id === tableData.id)
+      : updated.find((t) => t.tableNumber === tableData.tableNumber);
+    if (targetTable) {
+      FirebaseService.syncTable(slug, targetTable);
+    }
   };
 
   const deleteTableDefinition = (tableId: string) => {
@@ -2246,6 +2396,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const slug = currentRoute.workspaceSlug || 'default';
     const updated = TableService.deleteTableDefinition(tableId, slug);
     setTables(updated);
+    FirebaseService.deleteTableFromCloud(slug, tableId);
   };
 
   const addTableReservation = (
@@ -2258,6 +2409,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setReservations(TableService.getReservations(slug));
     setTables(res.tables);
     setTableAuditLogs(TableService.getAuditEntries(slug));
+    FirebaseService.syncReservation(slug, res.reservation);
+    FirebaseService.syncTablesBatch(slug, res.tables);
   };
 
   const updateReservationStatus = (
@@ -2268,9 +2421,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const slug = currentRoute.workspaceSlug || 'default';
     const operator = activeStaff ? activeStaff.name : 'Pemilik Kedai';
     const res = TableService.updateReservationStatus(reservationId, newStatus, operator, slug);
-    setReservations(TableService.getReservations(slug));
+    const currentRes = TableService.getReservations(slug);
+    setReservations(currentRes);
     setTables(res.tables);
     setTableAuditLogs(TableService.getAuditEntries(slug));
+    const targetRes = currentRes.find((r) => r.id === reservationId);
+    if (targetRes) {
+      FirebaseService.syncReservation(slug, targetRes);
+    }
+    FirebaseService.syncTablesBatch(slug, res.tables);
   };
 
   return (
@@ -2366,6 +2525,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         addTableReservation,
         updateReservationStatus,
         refreshTablesData,
+        refreshMenuData,
       }}
     >
       {children}

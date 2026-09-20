@@ -1,7 +1,24 @@
 import React, { useState } from 'react';
 import { MenuItem, MenuModifierGroup, KitchenStation } from '../../types/restaurant';
-import { Plus, Edit2, Trash2, CheckCircle, XCircle, UtensilsCrossed, X, AlertCircle } from 'lucide-react';
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  CheckCircle,
+  XCircle,
+  UtensilsCrossed,
+  X,
+  AlertCircle,
+  ShieldAlert,
+  Download,
+  UploadCloud,
+} from 'lucide-react';
 import { formatCurrency } from '../../services/formatters';
+import { DuplicateAuditModal } from '../common/DuplicateAuditModal';
+import { DuplicateAuditService, DuplicateGroup } from '../../services/duplicateAuditService';
+import { RestaurantCsvService } from '../../services/restaurantCsvService';
+import { RestaurantCsvImportModal } from './RestaurantCsvImportModal';
+import { AdminAuthService } from '../../services/adminAuthService';
 
 interface MenuManagementModalProps {
   isOpen: boolean;
@@ -11,6 +28,7 @@ interface MenuManagementModalProps {
   onSaveItem: (itemData: Partial<MenuItem> & { name: string; price: number; category: string }) => void;
   onDeleteItem: (id: string) => void;
   onToggleAvailability: (id: string) => void;
+  onRefreshMenu?: () => void;
 }
 
 export const MenuManagementModal: React.FC<MenuManagementModalProps> = ({
@@ -21,12 +39,20 @@ export const MenuManagementModal: React.FC<MenuManagementModalProps> = ({
   onSaveItem,
   onDeleteItem,
   onToggleAvailability,
+  onRefreshMenu,
 }) => {
   if (!isOpen) return null;
 
   const [activeTab, setActiveTab] = useState<'LIST' | 'FORM'>('LIST');
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
+
+  // Modal states for Duplicate Audit & CSV Import (SES v4.5)
+  const [isDuplicateAuditOpen, setIsDuplicateAuditOpen] = useState(false);
+  const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
+  const [auditGroups, setAuditGroups] = useState<DuplicateGroup<MenuItem>[]>([]);
+
+  const workspaceSlug = AdminAuthService.detectActiveWorkspaceSlug() || 'default';
 
   // Form states
   const [code, setCode] = useState<string>('');
@@ -167,7 +193,7 @@ export const MenuManagementModal: React.FC<MenuManagementModalProps> = ({
           </button>
         </div>
 
-        {/* Tab Nav & Actions */}
+        {/* Tab Nav & Actions - SES v4.5 Locked: [Audit Duplikasi] -> [Eksport CSV] -> [Import CSV] -> [Tambah Baharu] */}
         <div className="px-4 py-3 bg-stone-950/40 border-b border-stone-800/80 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <button
@@ -181,35 +207,81 @@ export const MenuManagementModal: React.FC<MenuManagementModalProps> = ({
             >
               Senarai Menu ({menuItems.length})
             </button>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {activeTab === 'LIST' && (
+              <div className="flex items-center gap-1.5 mr-1">
+                <span className="text-xs text-stone-400">Kategori:</span>
+                <select
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="bg-stone-950 border border-stone-800 rounded-lg px-2.5 py-1 text-xs text-stone-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                >
+                  <option value="ALL">Semua Kategori</option>
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* 1. Audit Duplikasi */}
             <button
               type="button"
+              id="menu-audit-duplikasi-btn"
+              onClick={() => {
+                const groups = DuplicateAuditService.auditMenuItems(menuItems);
+                setAuditGroups(groups);
+                setIsDuplicateAuditOpen(true);
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-800/80 text-amber-300 hover:bg-amber-950/40 border border-amber-500/30 transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+              <span>Audit Duplikasi</span>
+            </button>
+
+            {/* 2. Eksport CSV */}
+            <button
+              type="button"
+              id="menu-export-csv-btn"
+              onClick={() => {
+                RestaurantCsvService.exportMenuToCsv(menuItems, workspaceSlug);
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-800/80 text-stone-300 hover:text-white hover:bg-stone-800 border border-stone-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-sky-400" />
+              <span>Eksport CSV</span>
+            </button>
+
+            {/* 3. Import CSV */}
+            <button
+              type="button"
+              id="menu-import-csv-btn"
+              onClick={() => setIsCsvImportOpen(true)}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-800/80 text-stone-300 hover:text-white hover:bg-stone-800 border border-stone-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <UploadCloud className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Import CSV</span>
+            </button>
+
+            {/* 4. Tambah Baharu */}
+            <button
+              type="button"
+              id="menu-add-new-btn"
               onClick={startAddNew}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'FORM' && !editingItem
                   ? 'bg-emerald-600 text-white'
-                  : 'bg-stone-800/60 text-stone-300 hover:text-white hover:bg-stone-800'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
               }`}
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Tambah Hidangan Baharu</span>
+              <span>Tambah Baharu</span>
             </button>
           </div>
-
-          {activeTab === 'LIST' && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-stone-400">Kategori:</span>
-              <select
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-                className="bg-stone-950 border border-stone-800 rounded-lg px-2.5 py-1 text-xs text-stone-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              >
-                <option value="ALL">Semua Kategori</option>
-                {categories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
-          )}
         </div>
 
         {/* Content Body */}
@@ -579,6 +651,27 @@ export const MenuManagementModal: React.FC<MenuManagementModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* Audit Duplikasi Modal (SES v4.5) */}
+      <DuplicateAuditModal
+        isOpen={isDuplicateAuditOpen}
+        onClose={() => setIsDuplicateAuditOpen(false)}
+        entityTitle="Menu Restoran"
+        entityType="MENU_ITEM"
+        auditGroups={auditGroups}
+      />
+
+      {/* Import CSV Modal (SES v4.5) */}
+      <RestaurantCsvImportModal
+        isOpen={isCsvImportOpen}
+        onClose={() => setIsCsvImportOpen(false)}
+        workspaceSlug={workspaceSlug}
+        onImportSuccess={() => {
+          if (onRefreshMenu) {
+            onRefreshMenu();
+          }
+        }}
+      />
     </div>
   );
 };

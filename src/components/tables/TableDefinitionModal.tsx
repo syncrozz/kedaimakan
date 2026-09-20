@@ -58,7 +58,7 @@ export const TableDefinitionModal: React.FC<TableDefinitionModalProps> = ({
   // Set nilai awal apabila modal dibuka
   useEffect(() => {
     if (isOpen) {
-      if (zone === 'Bilik VIP') {
+      if (zone === 'Meja VIP' || zone === 'Bilik VIP') {
         setTableNumber(nextVipNumber);
         setCapacity(10);
       } else {
@@ -73,7 +73,7 @@ export const TableDefinitionModal: React.FC<TableDefinitionModalProps> = ({
     setZone(newZone);
     // Jika pengguna belum ubah secara manual atau bertukar ke/daripada VIP, cadangkan nombor sesuai
     if (!tableNumber || tableNumber.startsWith('VIP') || tableNumber.startsWith('T')) {
-      if (newZone === 'Bilik VIP') {
+      if (newZone === 'Meja VIP' || newZone === 'Bilik VIP') {
         setTableNumber(nextVipNumber);
         setCapacity(10);
       } else if (newZone === 'Dalam' || newZone === 'Luar / Terbuka') {
@@ -84,7 +84,7 @@ export const TableDefinitionModal: React.FC<TableDefinitionModalProps> = ({
   };
 
   const defaultZoneOptions = Array.from(
-    new Set(['Dalam', 'Luar / Terbuka', 'Bilik VIP', ...existingZones.map((z) => (z === 'Dewan Utama' ? 'Dalam' : z))])
+    new Set(['Dalam', 'Luar / Terbuka', 'Meja VIP', ...existingZones.map((z) => (z === 'Dewan Utama' ? 'Dalam' : (z === 'Bilik VIP' ? 'Meja VIP' : z)))])
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -92,7 +92,7 @@ export const TableDefinitionModal: React.FC<TableDefinitionModalProps> = ({
     setErrorMsg(null);
 
     let cleanNumber = tableNumber.trim().toUpperCase();
-    const finalZone = zone === 'LAIN' ? customZone.trim() : zone;
+    const finalZone = zone === 'LAIN' ? customZone.trim() : (zone === 'Bilik VIP' ? 'Meja VIP' : zone);
 
     // Normalisasi format VIP-X / VIP X / vip x kepada VIPX (cth: VIP-1 / VIP 1 -> VIP1, VIP-2 / VIP 2 -> VIP2)
     const vipMatch = cleanNumber.match(/^VIP[-\s]?(\d+)$/i);
@@ -102,7 +102,7 @@ export const TableDefinitionModal: React.FC<TableDefinitionModalProps> = ({
 
     // Jika nombor meja kosong, guna penomboran automatik
     if (!cleanNumber) {
-      cleanNumber = finalZone === 'Bilik VIP' ? nextVipNumber : nextTableNumber;
+      cleanNumber = (finalZone === 'Meja VIP' || finalZone === 'Bilik VIP') ? nextVipNumber : nextTableNumber;
     }
 
     // Pengesahan pencegahan nombor meja bertindih (SES v4.5)
@@ -168,7 +168,7 @@ export const TableDefinitionModal: React.FC<TableDefinitionModalProps> = ({
               <label className="block font-semibold text-stone-300">
                 Nombor / Kod Meja <span className="text-rose-400">*</span>
               </label>
-              {zone === 'Bilik VIP' && (
+              {(zone === 'Meja VIP' || zone === 'Bilik VIP') && (
                 <span className="text-[10px] text-amber-400 font-mono flex items-center gap-1 bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-800/60">
                   <Sparkles className="w-3 h-3 text-amber-400" />
                   Auto: {nextVipNumber}
@@ -180,13 +180,13 @@ export const TableDefinitionModal: React.FC<TableDefinitionModalProps> = ({
               <input
                 type="text"
                 required
-                placeholder={zone === 'Bilik VIP' ? `Cth: ${nextVipNumber}` : `Cth: ${nextTableNumber}, VIP2`}
+                placeholder={(zone === 'Meja VIP' || zone === 'Bilik VIP') ? `Cth: ${nextVipNumber}` : `Cth: ${nextTableNumber}, VIP2`}
                 value={tableNumber}
                 onChange={(e) => setTableNumber(e.target.value)}
                 className="w-full bg-stone-950 border border-stone-800 rounded-lg pl-9 pr-3 py-2 text-white uppercase font-mono placeholder-stone-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
             </div>
-            {zone === 'Bilik VIP' && (
+            {(zone === 'Meja VIP' || zone === 'Bilik VIP') && (
               <p className="text-[11px] text-stone-400 mt-1">
                 Sistem menetapkan susunan meja VIP secara automatik (VIP1, VIP2, VIP3...).
               </p>

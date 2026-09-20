@@ -86,7 +86,7 @@ export const INITIAL_TABLES: RestaurantTable[] = [
     id: 'tbl-08',
     storeId: 'default',
     tableNumber: 'VIP1',
-    zone: 'Bilik VIP',
+    zone: 'Meja VIP',
     capacity: 10,
     status: 'AVAILABLE',
     updatedAt: new Date().toISOString(),
@@ -109,6 +109,7 @@ export class TableService {
   /**
    * Migrasi automatik SES v4.5:
    * - Menukar zon 'Dewan Utama' / 'dewan utama' -> 'Dalam'
+   * - Menukar zon 'Bilik VIP' / 'bilik vip' -> 'Meja VIP'
    * - Menukar format nombor meja 'VIP-1' -> 'VIP1', 'VIP-2' -> 'VIP2'
    */
   static migrateLegacyZonesAndTableNumbers(tables: RestaurantTable[]): RestaurantTable[] {
@@ -118,6 +119,10 @@ export class TableService {
 
       if (t.zone?.trim().toLowerCase() === 'dewan utama') {
         newZone = 'Dalam';
+      }
+
+      if (t.zone?.trim().toLowerCase() === 'bilik vip' || t.zone?.trim() === 'Bilik VIP') {
+        newZone = 'Meja VIP';
       }
 
       // Tukar format 'VIP-1' -> 'VIP1' atau 'VIP-2' -> 'VIP2'
@@ -476,7 +481,7 @@ export class TableService {
 
       // Jika nombor meja tidak diisi, berikan nombor auto mengikut zon
       if (!finalTableNumber) {
-        if (finalZone === 'Bilik VIP') {
+        if (finalZone === 'Meja VIP' || finalZone === 'Bilik VIP') {
           finalTableNumber = this.getNextVipTableNumber(tables);
         } else {
           finalTableNumber = this.getNextTableNumber(tables);

@@ -42,6 +42,19 @@ import {
   LoyaltyLedgerEntry,
   StaffUser,
 } from '../types';
+import {
+  MenuItem,
+  RestaurantTable,
+  TableReservation,
+  RestaurantTaxConfig,
+} from '../types/restaurant';
+
+export interface RestaurantRealtimeCallbacks {
+  onMenuUpdated?: (items: MenuItem[]) => void;
+  onTablesUpdated?: (tables: RestaurantTable[]) => void;
+  onReservationsUpdated?: (reservations: TableReservation[]) => void;
+  onTaxConfigUpdated?: (config: RestaurantTaxConfig) => void;
+}
 
 export enum OperationType {
   CREATE = 'create',
@@ -884,6 +897,392 @@ export class FirebaseService {
           unsub();
         } catch (err) {
           console.warn('Error unsubscribing listener:', err);
+        }
+      });
+    };
+  }
+
+  // =========================================================================
+  // RESTAURANT DOMAIN REAL-TIME MULTI-DEVICE SYNC (SES v4.5)
+  // =========================================================================
+
+  private static cleanSlug(slug?: string): string {
+    if (!slug || !slug.trim()) return 'default';
+    return slug.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+  }
+
+  /**
+   * Fetches all restaurant domain entities (menu, tables, reservations, tax) from Cloud Firestore
+   */
+  public static async fetchRestaurantDataFromCloud(workspaceSlug: string = 'default'): Promise<{
+    menuItems: MenuItem[];
+    tables: RestaurantTable[];
+    reservations: TableReservation[];
+    taxConfig: RestaurantTaxConfig | null;
+  }> {
+    const slug = this.cleanSlug(workspaceSlug);
+    const emptyResult = { menuItems: [], tables: [], reservations: [], taxConfig: null };
+    if (!isFirebaseConfigured()) return emptyResult;
+    const db = this.getDb();
+    if (!db) return emptyResult;
+
+    try {
+      this.updateStatus('SYNCING');
+
+      // 1. Fetch Menu Items
+      const menuCol = collection(db, 'workspaces', slug, 'restaurant_menu');
+      const menuSnap = await getDocs(menuCol);
+      const menuItems: MenuItem[] = [];
+      menuSnap.forEach((d) => {
+        const item = d.data() as MenuItem;
+        menuItems.push({ ...item, id: d.id });
+      });
+
+      // 2. Fetch Restaurant Tables
+      const tablesCol = collection(db, 'workspaces', slug, 'restaurant_tables');
+      const tablesSnap = await getDocs(tablesCol);
+      const tables: RestaurantTable[] = [];
+      tablesSnap.forEach((d) => {
+        const tbl = d.data() as RestaurantTable;
+        tables.push({ ...tbl, id: d.id });
+      });
+
+      // 3. Fetch Reservations
+      const resCol = collection(db, 'workspaces', slug, 'restaurant_reservations');
+      const resSnap = await getDocs(resCol);
+      const reservations: TableReservation[] = [];
+      resSnap.forEach((d) => {
+        const res = d.data() as TableReservation;
+        reservations.push({ ...res, id: d.id });
+      });
+
+      // 4. Fetch Tax Config
+      const taxDocRef = doc(db, 'workspaces', slug, 'restaurant_settings', 'tax_config');
+      const taxDocSnap = await getDoc(taxDocRef);
+      const taxConfig = taxDocSnap.exists() ? (taxDocSnap.data() as RestaurantTaxConfig) : null;
+
+      this.updateStatus('CONNECTED');
+      return { menuItems, tables, reservations, taxConfig };
+    } catch (err) {
+      console.warn('fetchRestaurantDataFromCloud notice:', err);
+      this.updateStatus('CONNECTED');
+      return emptyResult;
+    }
+  }
+
+  /**
+   * Seeds cloud collections if empty for the workspace
+   */
+  public static async bootstrapRestaurantCollections(
+    workspaceSlug: string = 'default',
+    initialData: {
+      menuItems: MenuItem[];
+      tables: RestaurantTable[];
+      reservations?: TableReservation[];
+      taxConfig?: RestaurantTaxConfig;
+    }
+  ): Promise<void> {
+    const slug = this.cleanSlug(workspaceSlug);
+    if (!isFirebaseConfigured()) return;
+    const db = this.getDb();
+    if (!db) return;
+
+    try {
+      // Check menu
+      const menuCol = collection(db, 'workspaces', slug, 'restaurant_menu');
+      const menuSnap = await getDocs(menuCol);
+      if (menuSnap.empty && initialData.menuItems && initialData.menuItems.length > 0) {
+        await this.syncMenuItemsBatch(slug, initialData.menuItems);
+      }
+
+      // Check tables
+      const tablesCol = collection(db, 'workspaces', slug, 'restaurant_tables');
+      const tablesSnap = await getDocs(tablesCol);
+      if (tablesSnap.empty && initialData.tables && initialData.tables.length > 0) {
+        await this.syncTablesBatch(slug, initialData.tables);
+      }
+
+      // Check tax config
+      if (initialData.taxConfig) {
+        const taxDocRef = doc(db, 'workspaces', slug, 'restaurant_settings', 'tax_config');
+        const taxSnap = await getDoc(taxDocRef);
+        if (!taxSnap.exists()) {
+          await setDoc(taxDocRef, sanitize(initialData.taxConfig));
+        }
+      }
+    } catch (err) {
+      console.warn('bootstrapRestaurantCollections notice:', err);
+    }
+  }
+
+  /**
+   * Sync single menu item to Firestore
+   */
+  public static async syncMenuItem(workspaceSlug: string = 'default', item: MenuItem): Promise<void> {
+    const slug = this.cleanSlug(workspaceSlug);
+    const db = this.getDb();
+    if (!db) return;
+    try {
+      const docRef = doc(db, 'workspaces', slug, 'restaurant_menu', item.id);
+      await setDoc(docRef, sanitize(item));
+      this.updateStatus('CONNECTED');
+    } catch (err) {
+      console.warn('syncMenuItem error:', err);
+    }
+  }
+
+  /**
+   * Batch sync menu items to Firestore
+   */
+  public static async syncMenuItemsBatch(workspaceSlug: string = 'default', items: MenuItem[]): Promise<void> {
+    const slug = this.cleanSlug(workspaceSlug);
+    const db = this.getDb();
+    if (!db || items.length === 0) return;
+
+    try {
+      const CHUNK_SIZE = 250;
+      for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+        const chunk = items.slice(i, i + CHUNK_SIZE);
+        const batch = writeBatch(db);
+        for (const item of chunk) {
+          const docRef = doc(db, 'workspaces', slug, 'restaurant_menu', item.id);
+          batch.set(docRef, sanitize(item));
+        }
+        await batch.commit();
+      }
+      this.updateStatus('CONNECTED');
+    } catch (err) {
+      console.warn('syncMenuItemsBatch error:', err);
+    }
+  }
+
+  /**
+   * Delete menu item from Firestore
+   */
+  public static async deleteMenuItemFromCloud(workspaceSlug: string = 'default', itemId: string): Promise<void> {
+    const slug = this.cleanSlug(workspaceSlug);
+    const db = this.getDb();
+    if (!db) return;
+    try {
+      const docRef = doc(db, 'workspaces', slug, 'restaurant_menu', itemId);
+      await deleteDoc(docRef);
+      this.updateStatus('CONNECTED');
+    } catch (err) {
+      console.warn('deleteMenuItemFromCloud error:', err);
+    }
+  }
+
+  /**
+   * Sync single table to Firestore
+   */
+  public static async syncTable(workspaceSlug: string = 'default', table: RestaurantTable): Promise<void> {
+    const slug = this.cleanSlug(workspaceSlug);
+    const db = this.getDb();
+    if (!db) return;
+    try {
+      const docRef = doc(db, 'workspaces', slug, 'restaurant_tables', table.id);
+      await setDoc(docRef, sanitize(table));
+      this.updateStatus('CONNECTED');
+    } catch (err) {
+      console.warn('syncTable error:', err);
+    }
+  }
+
+  /**
+   * Batch sync tables to Firestore
+   */
+  public static async syncTablesBatch(workspaceSlug: string = 'default', tables: RestaurantTable[]): Promise<void> {
+    const slug = this.cleanSlug(workspaceSlug);
+    const db = this.getDb();
+    if (!db || tables.length === 0) return;
+
+    try {
+      const batch = writeBatch(db);
+      for (const tbl of tables) {
+        const docRef = doc(db, 'workspaces', slug, 'restaurant_tables', tbl.id);
+        batch.set(docRef, sanitize(tbl));
+      }
+      await batch.commit();
+      this.updateStatus('CONNECTED');
+    } catch (err) {
+      console.warn('syncTablesBatch error:', err);
+    }
+  }
+
+  /**
+   * Delete table from Firestore
+   */
+  public static async deleteTableFromCloud(workspaceSlug: string = 'default', tableId: string): Promise<void> {
+    const slug = this.cleanSlug(workspaceSlug);
+    const db = this.getDb();
+    if (!db) return;
+    try {
+      const docRef = doc(db, 'workspaces', slug, 'restaurant_tables', tableId);
+      await deleteDoc(docRef);
+      this.updateStatus('CONNECTED');
+    } catch (err) {
+      console.warn('deleteTableFromCloud error:', err);
+    }
+  }
+
+  /**
+   * Sync single reservation to Firestore
+   */
+  public static async syncReservation(workspaceSlug: string = 'default', reservation: TableReservation): Promise<void> {
+    const slug = this.cleanSlug(workspaceSlug);
+    const db = this.getDb();
+    if (!db) return;
+    try {
+      const docRef = doc(db, 'workspaces', slug, 'restaurant_reservations', reservation.id);
+      await setDoc(docRef, sanitize(reservation));
+      this.updateStatus('CONNECTED');
+    } catch (err) {
+      console.warn('syncReservation error:', err);
+    }
+  }
+
+  /**
+   * Batch sync reservations to Firestore
+   */
+  public static async syncReservationsBatch(workspaceSlug: string = 'default', reservations: TableReservation[]): Promise<void> {
+    const slug = this.cleanSlug(workspaceSlug);
+    const db = this.getDb();
+    if (!db || reservations.length === 0) return;
+
+    try {
+      const batch = writeBatch(db);
+      for (const res of reservations) {
+        const docRef = doc(db, 'workspaces', slug, 'restaurant_reservations', res.id);
+        batch.set(docRef, sanitize(res));
+      }
+      await batch.commit();
+      this.updateStatus('CONNECTED');
+    } catch (err) {
+      console.warn('syncReservationsBatch error:', err);
+    }
+  }
+
+  /**
+   * Delete reservation from Firestore
+   */
+  public static async deleteReservationFromCloud(workspaceSlug: string = 'default', reservationId: string): Promise<void> {
+    const slug = this.cleanSlug(workspaceSlug);
+    const db = this.getDb();
+    if (!db) return;
+    try {
+      const docRef = doc(db, 'workspaces', slug, 'restaurant_reservations', reservationId);
+      await deleteDoc(docRef);
+      this.updateStatus('CONNECTED');
+    } catch (err) {
+      console.warn('deleteReservationFromCloud error:', err);
+    }
+  }
+
+  /**
+   * Sync restaurant tax & service configuration to Firestore
+   */
+  public static async syncTaxConfig(workspaceSlug: string = 'default', config: RestaurantTaxConfig): Promise<void> {
+    const slug = this.cleanSlug(workspaceSlug);
+    const db = this.getDb();
+    if (!db) return;
+    try {
+      const docRef = doc(db, 'workspaces', slug, 'restaurant_settings', 'tax_config');
+      await setDoc(docRef, sanitize(config));
+      this.updateStatus('CONNECTED');
+    } catch (err) {
+      console.warn('syncTaxConfig error:', err);
+    }
+  }
+
+  /**
+   * Sets up real-time multi-device listeners for the Restaurant domain
+   */
+  public static subscribeToRestaurantRealtime(
+    workspaceSlug: string = 'default',
+    callbacks: RestaurantRealtimeCallbacks
+  ): () => void {
+    const slug = this.cleanSlug(workspaceSlug);
+    if (!isFirebaseConfigured()) return () => {};
+    const db = this.getDb();
+    if (!db) return () => {};
+
+    const localSubs: Unsubscribe[] = [];
+
+    try {
+      // 1. Menu Items Listener
+      if (callbacks.onMenuUpdated) {
+        const menuCol = collection(db, 'workspaces', slug, 'restaurant_menu');
+        const unsubMenu = onSnapshot(
+          menuCol,
+          (snapshot) => {
+            const list = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as MenuItem));
+            callbacks.onMenuUpdated?.(list);
+            this.updateStatus('CONNECTED');
+          },
+          (err) => console.warn('Restaurant menu listener notice:', err.message)
+        );
+        localSubs.push(unsubMenu);
+        this.activeSubscriptions.push(unsubMenu);
+      }
+
+      // 2. Tables Listener
+      if (callbacks.onTablesUpdated) {
+        const tablesCol = collection(db, 'workspaces', slug, 'restaurant_tables');
+        const unsubTables = onSnapshot(
+          tablesCol,
+          (snapshot) => {
+            const list = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as RestaurantTable));
+            callbacks.onTablesUpdated?.(list);
+            this.updateStatus('CONNECTED');
+          },
+          (err) => console.warn('Restaurant tables listener notice:', err.message)
+        );
+        localSubs.push(unsubTables);
+        this.activeSubscriptions.push(unsubTables);
+      }
+
+      // 3. Reservations Listener
+      if (callbacks.onReservationsUpdated) {
+        const resCol = collection(db, 'workspaces', slug, 'restaurant_reservations');
+        const unsubRes = onSnapshot(
+          resCol,
+          (snapshot) => {
+            const list = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as TableReservation));
+            callbacks.onReservationsUpdated?.(list);
+            this.updateStatus('CONNECTED');
+          },
+          (err) => console.warn('Restaurant reservations listener notice:', err.message)
+        );
+        localSubs.push(unsubRes);
+        this.activeSubscriptions.push(unsubRes);
+      }
+
+      // 4. Tax Config Listener
+      if (callbacks.onTaxConfigUpdated) {
+        const taxDocRef = doc(db, 'workspaces', slug, 'restaurant_settings', 'tax_config');
+        const unsubTax = onSnapshot(
+          taxDocRef,
+          (snap) => {
+            if (snap.exists()) {
+              callbacks.onTaxConfigUpdated?.(snap.data() as RestaurantTaxConfig);
+              this.updateStatus('CONNECTED');
+            }
+          },
+          (err) => console.warn('Restaurant tax config listener notice:', err.message)
+        );
+        localSubs.push(unsubTax);
+        this.activeSubscriptions.push(unsubTax);
+      }
+    } catch (err) {
+      console.warn('Error starting restaurant real-time listeners:', err);
+    }
+
+    return () => {
+      localSubs.forEach((unsub) => {
+        try {
+          unsub();
+        } catch (err) {
+          console.warn('Error unsubscribing restaurant listener:', err);
         }
       });
     };

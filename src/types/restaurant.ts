@@ -163,7 +163,7 @@ export interface RestaurantTable {
   id: string;
   storeId: string; // Tenant / Workspace ID
   tableNumber: string; // cth: "T01", "T02", "VIP1", "VIP2"
-  zone: string; // cth: "Utama", "Luar / Terbuka", "Bilik VIP"
+  zone: string; // cth: "Dalam", "Luar / Terbuka", "Meja VIP"
   capacity: number; // Bilangan kerusi (pax)
   status: TableStatus;
   currentOrderId?: string;

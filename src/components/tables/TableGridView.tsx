@@ -39,11 +39,22 @@ export const TableGridView: React.FC<TableGridViewProps> = ({
   const [selectedZone, setSelectedZone] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<TableStatus | 'ALL'>('ALL');
 
+  // Normalisasi zon lama ke standard terkini:
+  // 'Dewan Utama' -> 'Dalam'
+  // 'Bilik VIP' -> 'Meja VIP'
+  const normalizeZone = (zone?: string): string => {
+    if (!zone) return '';
+    const trimmed = zone.trim();
+    if (trimmed.toLowerCase() === 'dewan utama') return 'Dalam';
+    if (trimmed.toLowerCase() === 'bilik vip' || trimmed === 'Bilik VIP') return 'Meja VIP';
+    return trimmed;
+  };
+
   // Senarai zon unik
   const zones = useMemo(() => {
     const set = new Set<string>();
     tables.forEach((t) => {
-      const z = t.zone?.toLowerCase() === 'dewan utama' ? 'Dalam' : t.zone;
+      const z = normalizeZone(t.zone);
       if (z) set.add(z);
     });
     return Array.from(set);
@@ -94,7 +105,7 @@ export const TableGridView: React.FC<TableGridViewProps> = ({
   // Penapisan meja mengikut zon dan status
   const filteredTables = useMemo(() => {
     return tables.filter((tbl) => {
-      const tblZone = tbl.zone?.toLowerCase() === 'dewan utama' ? 'Dalam' : tbl.zone;
+      const tblZone = normalizeZone(tbl.zone);
       const matchZone = selectedZone === 'ALL' || tblZone === selectedZone;
       const matchStatus = statusFilter === 'ALL' || tbl.status === statusFilter;
       return matchZone && matchStatus;
@@ -272,7 +283,7 @@ export const TableGridView: React.FC<TableGridViewProps> = ({
 
           {zones.map((zone) => {
             const countInZone = tables.filter(
-              (t) => (t.zone?.toLowerCase() === 'dewan utama' ? 'Dalam' : t.zone) === zone
+              (t) => normalizeZone(t.zone) === zone
             ).length;
             return (
               <button
@@ -409,13 +420,9 @@ export const TableGridView: React.FC<TableGridViewProps> = ({
                         {table.tableNumber.replace(/^VIP-(\d+)$/i, 'VIP$1')}
                       </div>
                       <div>
-                        <span className="text-[10px] text-stone-400 block leading-tight">
-                          {table.zone?.toLowerCase() === 'dewan utama' ? 'Dalam' : table.zone}
+                        <span className="text-[11px] font-medium text-stone-300 block leading-tight">
+                          {normalizeZone(table.zone)}
                         </span>
-                        <div className="flex items-center gap-1 text-[11px] text-stone-400 mt-0.5">
-                          <Users className="w-3 h-3 text-stone-500" />
-                          <span>{table.capacity} Pax</span>
-                        </div>
                       </div>
                     </div>
 
@@ -466,20 +473,28 @@ export const TableGridView: React.FC<TableGridViewProps> = ({
                   )}
                 </div>
 
-                {/* Bawah: Maklumat Pesanan Aktif jika diduduki atau menunggu bayaran */}
-                {table.activeOrder && (
-                  <div className="pt-2 border-t border-stone-800/60 mt-2">
-                    <div className="flex items-center justify-between text-xs font-mono">
-                      <div className="flex items-center gap-1 text-stone-400">
-                        <Receipt className="w-3 h-3 text-sky-400" />
-                        <span>{table.activeOrder.itemsCount} item</span>
-                      </div>
-                      <span className="font-bold text-emerald-400 text-sm">
+                {/* Bawah: Maklumat Pesanan Aktif & Kapasiti Meja di Bahagian Bawah Kanan */}
+                <div className="pt-2 border-t border-stone-800/60 mt-2 flex items-center justify-between text-xs">
+                  {table.activeOrder ? (
+                    <div className="flex items-center gap-1 text-stone-400 font-mono">
+                      <Receipt className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                      <span>{table.activeOrder.itemsCount} item</span>
+                      <span className="text-stone-600 mx-0.5">&bull;</span>
+                      <span className="font-bold text-emerald-400 text-xs">
                         {formatCurrency(table.activeOrder.netAmount)}
                       </span>
                     </div>
+                  ) : null}
+
+                  {/* Kapasiti Meja di Bahagian Bawah Kanan (SES v4.5) */}
+                  <div
+                    id={`table-capacity-${table.tableNumber.toLowerCase()}`}
+                    className="flex items-center gap-1.5 text-[11px] font-medium text-stone-300 bg-stone-900/80 px-2 py-0.5 rounded-lg border border-stone-800 shrink-0 ml-auto"
+                  >
+                    <Users className="w-3 h-3 text-stone-400 shrink-0" />
+                    <span>{table.capacity} Pax</span>
                   </div>
-                )}
+                </div>
               </div>
             );
           })}

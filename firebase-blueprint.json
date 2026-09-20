@@ -248,6 +248,82 @@
         "details": { "type": "object" }
       },
       "required": ["id", "action", "workspaceId", "performedBy", "timestamp"]
+    },
+    "MenuItem": {
+      "title": "MenuItem",
+      "description": "Restaurant menu dish or beverage item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "storeId": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "costPrice": { "type": "number" },
+        "isAvailable": { "type": "boolean" },
+        "kitchenStation": { "type": "string" },
+        "active": { "type": "boolean" },
+        "modifierGroups": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "category", "price", "isAvailable"]
+    },
+    "RestaurantTable": {
+      "title": "RestaurantTable",
+      "description": "Restaurant dining table layout and occupancy state",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "storeId": { "type": "string" },
+        "tableNumber": { "type": "string" },
+        "zone": { "type": "string" },
+        "capacity": { "type": "number" },
+        "status": { "type": "string", "enum": ["AVAILABLE", "OCCUPIED", "RESERVED", "BILL_PRINTED", "WAITING_PAYMENT", "CLEANING"] },
+        "currentOrderId": { "type": "string" },
+        "activeOrder": { "type": "object" },
+        "activeGuestCount": { "type": "number" },
+        "occupiedSince": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "tableNumber", "zone", "capacity", "status"]
+    },
+    "TableReservation": {
+      "title": "TableReservation",
+      "description": "Customer table reservation and guest booking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "storeId": { "type": "string" },
+        "tableId": { "type": "string" },
+        "tableNumber": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "pax": { "type": "number" },
+        "reservationTime": { "type": "string" },
+        "reservationDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "SEATED", "CANCELLED", "NO_SHOW"] },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "tableId", "tableNumber", "customerName", "customerPhone", "pax", "reservationTime", "status"]
+    },
+    "RestaurantTaxConfig": {
+      "title": "RestaurantTaxConfig",
+      "description": "Restaurant tax and service charge settings",
+      "type": "object",
+      "properties": {
+        "taxEnabled": { "type": "boolean" },
+        "taxName": { "type": "string" },
+        "taxRatePercent": { "type": "number" },
+        "isTaxInclusive": { "type": "boolean" },
+        "serviceChargeEnabled": { "type": "boolean" },
+        "serviceChargeName": { "type": "string" },
+        "serviceChargePercent": { "type": "number" }
+      },
+      "required": ["taxEnabled", "taxRatePercent", "serviceChargeEnabled", "serviceChargePercent"]
     }
   },
   "firestore": {
@@ -345,6 +421,44 @@
     "/audit_logs/{logId}": {
       "schema": "AuditLog",
       "description": "Administrative action and PIN reset audit trail"
+    },
+    "/restaurant_menus/{itemId}": {
+      "schema": "MenuItem",
+      "description": "Root restaurant menu items"
+    },
+    "/restaurant_tables/{tableId}": {
+      "schema": "RestaurantTable",
+      "description": "Root restaurant tables"
+    },
+    "/restaurant_reservations/{reservationId}": {
+      "schema": "TableReservation",
+      "description": "Root restaurant table reservations"
+    },
+    "/restaurant_tax_configs/{configId}": {
+      "schema": "RestaurantTaxConfig",
+      "description": "Root restaurant tax configurations"
+    },
+    "/workspaces/{workspaceId}/restaurant_menu/{itemId}": {
+      "schema": "MenuItem",
+      "description": "Tenant restaurant menu catalog"
+    },
+    "/workspaces/{workspaceId}/restaurant_tables/{tableId}": {
+      "schema": "RestaurantTable",
+      "description": "Tenant restaurant dining tables"
+    },
+    "/workspaces/{workspaceId}/restaurant_reservations/{reservationId}": {
+      "schema": "TableReservation",
+      "description": "Tenant customer reservations"
+    },
+    "/workspaces/{workspaceId}/restaurant_settings/{configId}": {
+      "schema": "RestaurantTaxConfig",
+      "description": "Tenant restaurant tax and service fee configuration"
+    },
+    "/workspaces/{workspaceId}/kitchenOrders/{kotId}": {
+      "description": "Tenant kitchen order tickets for KDS"
+    },
+    "/workspaces/{workspaceId}/kitchenAudit/{auditId}": {
+      "description": "Tenant kitchen order ticket lifecycle audit log"
     }
   }
 }
