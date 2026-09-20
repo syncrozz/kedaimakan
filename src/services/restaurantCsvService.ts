@@ -103,7 +103,7 @@ export class RestaurantCsvService {
     });
 
     const dateStr = getLocalDateString();
-    const filename = customFilename || `syncrozz_menu_${workspaceSlug}_${dateStr}.csv`;
+    const filename = customFilename || `POS_Restoran_menu_${workspaceSlug}_${dateStr}.csv`;
     CsvService.downloadCsv(filename, headers, rows);
   }
 
@@ -132,7 +132,7 @@ export class RestaurantCsvService {
     ]);
 
     const dateStr = getLocalDateString();
-    const filename = customFilename || `syncrozz_tables_${workspaceSlug}_${dateStr}.csv`;
+    const filename = customFilename || `POS_Restoran_tables_${workspaceSlug}_${dateStr}.csv`;
     CsvService.downloadCsv(filename, headers, rows);
   }
 
@@ -142,7 +142,7 @@ export class RestaurantCsvService {
   public static downloadMenuCsvTemplate(type: 'WALI_CAPATI' | 'TOMYAM' | 'STANDARD' = 'WALI_CAPATI'): void {
     const csvContent = this.generateSampleCsv(type);
     const dateStr = getLocalDateString();
-    const filename = `syncrozz_menu_template_${type.toLowerCase()}_${dateStr}.csv`;
+    const filename = `POS_Restoran_menu_template_${type.toLowerCase()}_${dateStr}.csv`;
     const { headers, rows } = CsvService.parseCsvText(csvContent);
     const formattedRows = rows.map((r) => headers.map((h) => r[h] || ''));
     CsvService.downloadCsv(filename, headers, formattedRows);
