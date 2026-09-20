@@ -225,6 +225,13 @@ export class TableService {
   }
 
   /**
+   * Mengosongkan rekod tempahan meja
+   */
+  static clearReservations(workspaceSlug: string = 'default'): void {
+    this.saveReservations([], workspaceSlug);
+  }
+
+  /**
    * Pembantu untuk menghuraikan tarikh & masa tempahan ke objek Date yang sah
    */
   static parseReservationDateTime(reservation: TableReservation): Date {

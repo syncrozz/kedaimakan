@@ -6,6 +6,7 @@ import {
   Plus,
   Minus,
   CheckCircle,
+  CheckCircle2,
   Receipt,
   AlertCircle,
   Tag,
@@ -20,6 +21,7 @@ import {
   Sparkles,
   ChevronRight,
   ShieldCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import {
@@ -47,6 +49,7 @@ import { DuplicateAuditModal } from '../common/DuplicateAuditModal';
 import { DuplicateAuditService, DuplicateGroup } from '../../services/duplicateAuditService';
 import { RestaurantCsvService } from '../../services/restaurantCsvService';
 import { RestaurantCsvImportModal } from '../menu/RestaurantCsvImportModal';
+import { RestaurantClearDataModal } from './RestaurantClearDataModal';
 
 export const RestaurantPosView: React.FC = () => {
   const {
@@ -68,6 +71,8 @@ export const RestaurantPosView: React.FC = () => {
     addTableReservation,
     refreshTablesData,
     refreshMenuData,
+    clearRestaurantData,
+    loadSampleRestaurantData,
     businessConfig,
   } = useStore();
 
@@ -86,6 +91,8 @@ export const RestaurantPosView: React.FC = () => {
   const [auditTitle, setAuditTitle] = useState<string>('Rekod');
   const [auditType, setAuditType] = useState<'TABLE' | 'MENU_ITEM'>('TABLE');
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
+  const [isClearDataModalOpen, setIsClearDataModalOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Restaurant Order Header State
   const [orderType, setOrderType] = useState<RestaurantOrderType>('DINE_IN');
@@ -567,7 +574,21 @@ export const RestaurantPosView: React.FC = () => {
             <span className="hidden sm:inline">Import CSV</span>
           </button>
 
-          {/* 4. Tambah Baharu */}
+          {/* 4. Mula Dari Kosong (Reset Data Demo / Pilihan Kategori) */}
+          {(tables.length > 0 || menuItems.length > 0 || reservations.length > 0) && (
+            <button
+              type="button"
+              id="restaurant-clear-data-zero-btn"
+              onClick={() => setIsClearDataModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-stone-800/80 hover:bg-rose-950/40 text-rose-300 hover:text-rose-200 border border-rose-800/50 hover:border-rose-600/60 transition cursor-pointer"
+              title="Mula Dari Kosong (Padamkan data demo meja, menu, atau semua)"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              <span className="hidden sm:inline">Mula Dari Kosong</span>
+            </button>
+          )}
+
+          {/* 5. Tambah Baharu */}
           {activeRestaurantTab === 'TABLES' ? (
             <button
               type="button"
@@ -592,6 +613,23 @@ export const RestaurantPosView: React.FC = () => {
         </div>
       </div>
 
+      {/* Kejayaan Mesej Alert */}
+      {successMessage && (
+        <div className="bg-emerald-950/40 border border-emerald-800 rounded-xl p-3 flex items-center justify-between gap-2 text-emerald-300 text-xs animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+            <span>{successMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessMessage(null)}
+            className="text-stone-400 hover:text-white text-xs underline cursor-pointer"
+          >
+            Tutup
+          </button>
+        </div>
+      )}
+
       {/* Ralat Mesej Alert */}
       {errorMessage && (
         <div className="bg-rose-950/40 border border-rose-800 rounded-xl p-3 flex items-center justify-between gap-2 text-rose-300 text-xs">
@@ -602,7 +640,7 @@ export const RestaurantPosView: React.FC = () => {
           <button
             type="button"
             onClick={() => setErrorMessage(null)}
-            className="text-stone-400 hover:text-white text-xs underline"
+            className="text-stone-400 hover:text-white text-xs underline cursor-pointer"
           >
             Tutup
           </button>
@@ -618,6 +656,11 @@ export const RestaurantPosView: React.FC = () => {
             setSelectedTableForDetail(table);
           }}
           onOpenNewTableModal={() => setIsAddTableModalOpen(true)}
+          onLoadSampleTables={() => {
+            loadSampleRestaurantData({ tables: true });
+            setSuccessMessage('Data contoh pelan meja restoran berjaya dimuatkan semula.');
+            setTimeout(() => setSuccessMessage(null), 5000);
+          }}
         />
       ) : null}
 
@@ -741,11 +784,54 @@ export const RestaurantPosView: React.FC = () => {
             })}
           </div>
 
-          {filteredMenuItems.length === 0 && (
+          {menuItems.length === 0 ? (
+            <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-8 text-center flex flex-col items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-950/40 border border-emerald-800/40 flex items-center justify-center text-emerald-400 mb-3">
+                <ChefHat className="w-6 h-6" />
+              </div>
+              <p className="text-base font-bold text-stone-200">Katalog Menu Masih Kosong</p>
+              <p className="text-xs text-stone-400 max-w-md mt-1 mb-5">
+                Semua menu hidangan demo telah dikosongkan. Anda boleh mendaftar hidangan sebenar kedai anda satu demi satu atau import pukal melalui fail CSV.
+              </p>
+              <div className="flex items-center gap-3 flex-wrap justify-center">
+                <button
+                  type="button"
+                  id="empty-menu-add-btn"
+                  onClick={() => setIsMenuManagementOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm cursor-pointer"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Daftar Menu Baharu</span>
+                </button>
+                <button
+                  type="button"
+                  id="empty-menu-import-csv-btn"
+                  onClick={() => setIsCsvImportOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white border border-stone-700 transition cursor-pointer"
+                >
+                  <UploadCloud className="w-4 h-4 text-emerald-400" />
+                  <span>Import Menu CSV</span>
+                </button>
+                <button
+                  type="button"
+                  id="empty-menu-load-sample-btn"
+                  onClick={() => {
+                    loadSampleRestaurantData({ menu: true });
+                    setSuccessMessage('Data contoh menu hidangan telah dimuatkan semula.');
+                    setTimeout(() => setSuccessMessage(null), 5000);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-stone-800/60 hover:bg-stone-700 text-stone-400 hover:text-stone-200 border border-stone-800 transition cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Muat Data Contoh Menu</span>
+                </button>
+              </div>
+            </div>
+          ) : filteredMenuItems.length === 0 ? (
             <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-8 text-center text-xs text-stone-500">
               Tiada hidangan ditemui mengikut carian atau kategori ini.
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Kolum Kanan: Maklumat Meja, Troli & Pembayaran (5 Lajur) */}
@@ -1164,6 +1250,19 @@ export const RestaurantPosView: React.FC = () => {
         workspaceSlug={activeWorkspaceSlug}
         onImportSuccess={() => {
           refreshMenuData();
+        }}
+      />
+
+      {/* Modal Mula Dari Kosong (Reset Data Restoran) */}
+      <RestaurantClearDataModal
+        isOpen={isClearDataModalOpen}
+        onClose={() => setIsClearDataModalOpen(false)}
+        tableCount={tables.length}
+        menuCount={menuItems.length}
+        reservationCount={reservations.length}
+        onSuccess={(msg) => {
+          setSuccessMessage(msg);
+          setTimeout(() => setSuccessMessage(null), 6000);
         }}
       />
     </div>

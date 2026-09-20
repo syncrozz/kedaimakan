@@ -1179,6 +1179,41 @@ export class FirebaseService {
   }
 
   /**
+   * Clear restaurant subcollections from Firestore (SES v4.5 Mula Dari Kosong)
+   */
+  public static async clearRestaurantCollections(
+    workspaceSlug: string = 'default',
+    subcollectionNames: string[]
+  ): Promise<void> {
+    if (!isFirebaseConfigured()) return;
+    const db = this.getDb();
+    if (!db) return;
+    const slug = this.cleanSlug(workspaceSlug);
+
+    try {
+      this.updateStatus('SYNCING');
+      for (const colName of subcollectionNames) {
+        const snap = await getDocs(collection(db, 'workspaces', slug, colName));
+        if (!snap.empty) {
+          const docs = snap.docs;
+          const chunkSize = 400;
+          for (let i = 0; i < docs.length; i += chunkSize) {
+            const batch = writeBatch(db);
+            const chunk = docs.slice(i, i + chunkSize);
+            chunk.forEach((docSnap) => {
+              batch.delete(docSnap.ref);
+            });
+            await batch.commit();
+          }
+        }
+      }
+      this.updateStatus('CONNECTED');
+    } catch (err) {
+      console.warn('clearRestaurantCollections notice:', err);
+    }
+  }
+
+  /**
    * Sync restaurant tax & service configuration to Firestore
    */
   public static async syncTaxConfig(workspaceSlug: string = 'default', config: RestaurantTaxConfig): Promise<void> {

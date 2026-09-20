@@ -28,6 +28,7 @@ interface TableGridViewProps {
   onSelectTable: (table: RestaurantTable) => void;
   onOpenNewTableModal?: () => void;
   onRefresh?: () => void;
+  onLoadSampleTables?: () => void;
 }
 
 export const TableGridView: React.FC<TableGridViewProps> = ({
@@ -35,6 +36,7 @@ export const TableGridView: React.FC<TableGridViewProps> = ({
   onSelectTable,
   onOpenNewTableModal,
   onRefresh,
+  onLoadSampleTables,
 }) => {
   const [selectedZone, setSelectedZone] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<TableStatus | 'ALL'>('ALL');
@@ -384,7 +386,41 @@ export const TableGridView: React.FC<TableGridViewProps> = ({
       )}
 
       {/* Grid Kad Meja */}
-      {filteredTables.length === 0 ? (
+      {tables.length === 0 ? (
+        <div className="py-16 px-4 text-center bg-stone-900/40 border border-stone-800 rounded-2xl flex flex-col items-center justify-center">
+          <div className="w-12 h-12 rounded-2xl bg-amber-950/40 border border-amber-800/40 flex items-center justify-center text-amber-400 mb-3">
+            <LayoutGrid className="w-6 h-6" />
+          </div>
+          <p className="text-base font-bold text-stone-200">Pelan Meja Masih Kosong</p>
+          <p className="text-xs text-stone-400 max-w-md mt-1 mb-5">
+            Sistem sedia untuk anda menyusun atur pelan meja restoran dari sifar. Anda boleh mendaftar meja baharu mengikut zon kedai atau memuat data contoh untuk rujukan.
+          </p>
+          <div className="flex items-center gap-3 flex-wrap justify-center">
+            {onOpenNewTableModal && (
+              <button
+                type="button"
+                id="empty-state-add-table-btn"
+                onClick={onOpenNewTableModal}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tambah Meja Pertama</span>
+              </button>
+            )}
+            {onLoadSampleTables && (
+              <button
+                type="button"
+                id="empty-state-load-sample-tables-btn"
+                onClick={onLoadSampleTables}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white border border-stone-700 transition cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Muat Data Contoh Meja</span>
+              </button>
+            )}
+          </div>
+        </div>
+      ) : filteredTables.length === 0 ? (
         <div className="py-16 text-center bg-stone-900/40 border border-stone-800 rounded-2xl">
           <LayoutGrid className="w-10 h-10 text-stone-600 mx-auto mb-2" />
           <p className="text-sm font-semibold text-stone-300">Tiada meja dijumpai.</p>

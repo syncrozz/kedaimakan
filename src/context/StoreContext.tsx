@@ -207,6 +207,15 @@ interface StoreContextType {
   ) => void;
   refreshTablesData: () => void;
   refreshMenuData: () => void;
+  clearRestaurantData: (options: {
+    tables?: boolean;
+    menu?: boolean;
+    reservations?: boolean;
+  }) => Promise<{ success: boolean; message: string }>;
+  loadSampleRestaurantData: (options: {
+    tables?: boolean;
+    menu?: boolean;
+  }) => void;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -2432,6 +2441,71 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     FirebaseService.syncTablesBatch(slug, res.tables);
   };
 
+  const clearRestaurantData = async (options: {
+    tables?: boolean;
+    menu?: boolean;
+    reservations?: boolean;
+  }): Promise<{ success: boolean; message: string }> => {
+    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+    const slug = currentRoute.workspaceSlug || 'default';
+    const clearedNames: string[] = [];
+    const collectionsToClear: string[] = [];
+
+    if (options.menu) {
+      MenuService.clearMenu(slug);
+      setMenuItems([]);
+      clearedNames.push('Menu Hidangan');
+      collectionsToClear.push('restaurant_menu');
+    }
+
+    if (options.tables) {
+      TableService.clearTables(slug);
+      setTables([]);
+      clearedNames.push('Susun Atur Meja');
+      collectionsToClear.push('restaurant_tables');
+    }
+
+    if (options.reservations) {
+      TableService.clearReservations(slug);
+      setReservations([]);
+      clearedNames.push('Tempahan & Pesanan Meja');
+      collectionsToClear.push('restaurant_reservations');
+    }
+
+    if (collectionsToClear.length > 0) {
+      try {
+        await FirebaseService.clearRestaurantCollections(slug, collectionsToClear);
+      } catch (err) {
+        console.warn('Gagal memadam koleksi restoran di awan:', err);
+      }
+    }
+
+    return {
+      success: true,
+      message:
+        clearedNames.length > 0
+          ? `Data [${clearedNames.join(', ')}] telah berjaya dikosongkan. Klien sedia bermula dari kosong sepenuhnya.`
+          : 'Tiada kategori dipilih untuk dikosongkan.',
+    };
+  };
+
+  const loadSampleRestaurantData = (options: { tables?: boolean; menu?: boolean }) => {
+    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+    const slug = currentRoute.workspaceSlug || 'default';
+
+    if (options.menu) {
+      const items = MenuService.loadSampleMenu(slug);
+      setMenuItems(items);
+      FirebaseService.syncMenuItemsBatch(slug, items);
+    }
+
+    if (options.tables) {
+      const tbls = TableService.loadSampleTables(slug);
+      setTables(tbls);
+      FirebaseService.syncTablesBatch(slug, tbls);
+    }
+  };
+
   return (
     <StoreContext.Provider
       value={{
@@ -2526,6 +2600,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateReservationStatus,
         refreshTablesData,
         refreshMenuData,
+        clearRestaurantData,
+        loadSampleRestaurantData,
       }}
     >
       {children}
