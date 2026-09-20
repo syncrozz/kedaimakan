@@ -9,18 +9,132 @@
  */
 
 import { Product, Supplier, Customer, StaffUser } from '../types';
+import { MenuItem, RestaurantTable } from '../types/restaurant';
 
 export interface DuplicateGroup<T> {
-  entityType: 'PRODUCT' | 'SUPPLIER' | 'CUSTOMER' | 'STAFF';
+  entityType: 'PRODUCT' | 'SUPPLIER' | 'CUSTOMER' | 'STAFF' | 'MENU_ITEM' | 'TABLE';
   field: string;
   duplicateValue: string;
   items: T[];
   message: string;
+  matchType?: 'EXACT' | 'CASE_WHITESPACE';
 }
 
 export type DuplicateAuditGroup<T> = DuplicateGroup<T>;
 
 export class DuplicateAuditService {
+  /**
+   * Audits Menu Items for identical names or codes (Exact and Case/Whitespace Normalized).
+   * Non-destructive detection and review only.
+   */
+  public static auditMenuItems(menuItems: MenuItem[]): DuplicateGroup<MenuItem>[] {
+    const results: DuplicateGroup<MenuItem>[] = [];
+
+    const exactNameMap = new Map<string, MenuItem[]>();
+    const normalizedNameMap = new Map<string, MenuItem[]>();
+    const codeMap = new Map<string, MenuItem[]>();
+
+    menuItems.forEach((item) => {
+      const rawName = (item.name || '').trim();
+      const normName = rawName.toLowerCase().replace(/\s+/g, ' ');
+
+      if (rawName) {
+        const exactList = exactNameMap.get(rawName) || [];
+        exactList.push(item);
+        exactNameMap.set(rawName, exactList);
+
+        const normList = normalizedNameMap.get(normName) || [];
+        normList.push(item);
+        normalizedNameMap.set(normName, normList);
+      }
+
+      const code = (item.code || '').trim().toUpperCase();
+      if (code) {
+        const codeList = codeMap.get(code) || [];
+        codeList.push(item);
+        codeMap.set(code, codeList);
+      }
+    });
+
+    // Check code duplicates
+    codeMap.forEach((items, code) => {
+      if (items.length > 1) {
+        results.push({
+          entityType: 'MENU_ITEM',
+          field: 'Kod Menu',
+          duplicateValue: code,
+          items,
+          message: `${items.length} hidangan berkongsi Kod Menu yang sama: ${code}`,
+          matchType: 'EXACT',
+        });
+      }
+    });
+
+    // Check exact name duplicates
+    const reportedExactNames = new Set<string>();
+    exactNameMap.forEach((items, name) => {
+      if (items.length > 1) {
+        results.push({
+          entityType: 'MENU_ITEM',
+          field: 'Nama Hidangan (Tepat)',
+          duplicateValue: name,
+          items,
+          message: `${items.length} hidangan mempunyai nama yang sama tepat: "${name}"`,
+          matchType: 'EXACT',
+        });
+        reportedExactNames.add(name.toLowerCase().replace(/\s+/g, ' '));
+      }
+    });
+
+    // Check normalized whitespace / case-insensitive duplicates (if not already reported exact)
+    normalizedNameMap.forEach((items, normName) => {
+      if (items.length > 1 && !reportedExactNames.has(normName)) {
+        results.push({
+          entityType: 'MENU_ITEM',
+          field: 'Nama Hidangan (Variasi Huruf / Ruang)',
+          duplicateValue: normName,
+          items,
+          message: `${items.length} hidangan berkongsi nama hampir serupa (perbezaan huruf/jarak): "${normName}"`,
+          matchType: 'CASE_WHITESPACE',
+        });
+      }
+    });
+
+    return results;
+  }
+
+  /**
+   * Audits Restaurant Tables for duplicate table numbers.
+   * Non-destructive detection and review only.
+   */
+  public static auditTables(tables: RestaurantTable[]): DuplicateGroup<RestaurantTable>[] {
+    const results: DuplicateGroup<RestaurantTable>[] = [];
+    const tableNoMap = new Map<string, RestaurantTable[]>();
+
+    tables.forEach((t) => {
+      const cleanNo = (t.tableNumber || '').trim().toUpperCase().replace(/\s+/g, '');
+      if (cleanNo) {
+        const group = tableNoMap.get(cleanNo) || [];
+        group.push(t);
+        tableNoMap.set(cleanNo, group);
+      }
+    });
+
+    tableNoMap.forEach((items, no) => {
+      if (items.length > 1) {
+        results.push({
+          entityType: 'TABLE',
+          field: 'Nombor Meja',
+          duplicateValue: no,
+          items,
+          message: `${items.length} meja berkongsi nombor meja yang sama: ${no}`,
+          matchType: 'EXACT',
+        });
+      }
+    });
+
+    return results;
+  }
   /**
    * Audits Products for identical SKUs or duplicate Names.
    */

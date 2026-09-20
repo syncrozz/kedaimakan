@@ -12,6 +12,7 @@ import {
   TableStatusAuditEntry,
   RestaurantActiveOrderSummary,
 } from '../types/restaurant';
+import { getLocalDateString } from './formatters';
 
 const TABLE_STORAGE_PREFIX = 'syncrozz_tables_';
 const RESERVATION_STORAGE_PREFIX = 'syncrozz_reservations_';
@@ -22,7 +23,7 @@ export const INITIAL_TABLES: RestaurantTable[] = [
     id: 'tbl-01',
     storeId: 'default',
     tableNumber: 'T01',
-    zone: 'Dewan Utama',
+    zone: 'Dalam',
     capacity: 4,
     status: 'AVAILABLE',
     updatedAt: new Date().toISOString(),
@@ -31,7 +32,7 @@ export const INITIAL_TABLES: RestaurantTable[] = [
     id: 'tbl-02',
     storeId: 'default',
     tableNumber: 'T02',
-    zone: 'Dewan Utama',
+    zone: 'Dalam',
     capacity: 2,
     status: 'AVAILABLE',
     updatedAt: new Date().toISOString(),
@@ -40,7 +41,7 @@ export const INITIAL_TABLES: RestaurantTable[] = [
     id: 'tbl-03',
     storeId: 'default',
     tableNumber: 'T03',
-    zone: 'Dewan Utama',
+    zone: 'Dalam',
     capacity: 4,
     status: 'AVAILABLE',
     updatedAt: new Date().toISOString(),
@@ -49,7 +50,7 @@ export const INITIAL_TABLES: RestaurantTable[] = [
     id: 'tbl-04',
     storeId: 'default',
     tableNumber: 'T04',
-    zone: 'Dewan Utama',
+    zone: 'Dalam',
     capacity: 6,
     status: 'AVAILABLE',
     updatedAt: new Date().toISOString(),
@@ -84,7 +85,7 @@ export const INITIAL_TABLES: RestaurantTable[] = [
   {
     id: 'tbl-08',
     storeId: 'default',
-    tableNumber: 'VIP-1',
+    tableNumber: 'VIP1',
     zone: 'Bilik VIP',
     capacity: 10,
     status: 'AVAILABLE',
@@ -106,25 +107,70 @@ export class TableService {
   }
 
   /**
+   * Migrasi automatik SES v4.5:
+   * - Menukar zon 'Dewan Utama' / 'dewan utama' -> 'Dalam'
+   * - Menukar format nombor meja 'VIP-1' -> 'VIP1', 'VIP-2' -> 'VIP2'
+   */
+  static migrateLegacyZonesAndTableNumbers(tables: RestaurantTable[]): RestaurantTable[] {
+    return tables.map((t) => {
+      let newZone = t.zone;
+      let newTableNumber = t.tableNumber;
+
+      if (t.zone?.trim().toLowerCase() === 'dewan utama') {
+        newZone = 'Dalam';
+      }
+
+      // Tukar format 'VIP-1' -> 'VIP1' atau 'VIP-2' -> 'VIP2'
+      const vipMatch = t.tableNumber.match(/^VIP-(\d+)$/i);
+      if (vipMatch) {
+        newTableNumber = `VIP${vipMatch[1]}`;
+      }
+
+      if (newZone !== t.zone || newTableNumber !== t.tableNumber) {
+        return { ...t, zone: newZone, tableNumber: newTableNumber };
+      }
+      return t;
+    });
+  }
+
+  /**
    * Dapatkan semua meja untuk workspace aktif, disegerakkan dengan tempahan aktif
    */
   static getTables(workspaceSlug: string = 'default'): RestaurantTable[] {
     let tables: RestaurantTable[] = [];
+    let hasStorageRecord = false;
+
     try {
       const raw = localStorage.getItem(this.getTableStorageKey(workspaceSlug));
-      if (raw) {
+      if (raw !== null) {
+        hasStorageRecord = true;
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           tables = parsed;
         }
+      }
+      // Semak jika pengguna telah memilih untuk mengosongkan meja
+      const isCleared = localStorage.getItem(`syncrozz_tables_cleared_${workspaceSlug}`) === 'true';
+      if (isCleared && tables.length === 0) {
+        return [];
       }
     } catch (e) {
       console.warn('Gagal membaca senarai meja dari localStorage:', e);
     }
 
-    if (tables.length === 0) {
+    if (!hasStorageRecord) {
       tables = INITIAL_TABLES.map((t) => ({ ...t, storeId: workspaceSlug }));
       this.saveTables(tables, workspaceSlug);
+    } else if (tables.length > 0) {
+      // Migrasi automatik SES v4.5: 'Dewan Utama' -> 'Dalam' dan 'VIP-1' -> 'VIP1'
+      const migrated = this.migrateLegacyZonesAndTableNumbers(tables);
+      const wasUpdated = migrated.some(
+        (t, idx) => t.zone !== tables[idx]?.zone || t.tableNumber !== tables[idx]?.tableNumber
+      );
+      if (wasUpdated) {
+        tables = migrated;
+        this.saveTables(tables, workspaceSlug);
+      }
     }
 
     // Segerakkan amaran tempahan akan datang / aktif
@@ -135,11 +181,12 @@ export class TableService {
       );
       // Susun mengikut masa tempahan secara kronologi
       tableReservations.sort(
-        (a, b) => TableService.parseReservationDateTime(a).getTime() - TableService.parseReservationDateTime(b).getTime()
+        (a, b) =>
+          this.parseReservationDateTime(a).getTime() - this.parseReservationDateTime(b).getTime()
       );
 
       // Cari tempahan hari ini terlebih dahulu, atau tempahan akan datang terdekat
-      const todayPending = tableReservations.filter((r) => TableService.isReservationForToday(r));
+      const todayPending = tableReservations.filter((r) => this.isReservationForToday(r));
       const activeRes = todayPending.length > 0 ? todayPending[0] : (tableReservations.length > 0 ? tableReservations[0] : undefined);
 
       return {
@@ -151,10 +198,32 @@ export class TableService {
   }
 
   /**
+   * Muat meja contoh hanya atas arahan jelas pengguna (Explicit User Action)
+   */
+  static loadSampleTables(workspaceSlug: string = 'default'): RestaurantTable[] {
+    const tables = INITIAL_TABLES.map((t) => ({ ...t, storeId: workspaceSlug }));
+    this.saveTables(tables, workspaceSlug);
+    localStorage.removeItem(`syncrozz_tables_cleared_${workspaceSlug}`);
+    return tables;
+  }
+
+  /**
+   * Mengosongkan data meja tanpa kebangkitan semula automatik
+   */
+  static clearTables(workspaceSlug: string = 'default'): void {
+    this.saveTables([], workspaceSlug);
+    try {
+      localStorage.setItem(`syncrozz_tables_cleared_${workspaceSlug}`, 'true');
+    } catch (e) {
+      console.error('Gagal menetapkan tanda meja kosong:', e);
+    }
+  }
+
+  /**
    * Pembantu untuk menghuraikan tarikh & masa tempahan ke objek Date yang sah
    */
   static parseReservationDateTime(reservation: TableReservation): Date {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalDateString();
     const dateStr =
       reservation.reservationDate ||
       (reservation.createdAt ? reservation.createdAt.split('T')[0] : todayStr);
@@ -330,6 +399,36 @@ export class TableService {
   }
 
   /**
+   * Menjana nombor meja VIP baharu secara automatik (VIP1, VIP2, VIP3, ...)
+   */
+  static getNextVipTableNumber(tables: RestaurantTable[]): string {
+    let maxVipNum = 0;
+    tables.forEach((t) => {
+      const match = t.tableNumber.match(/^VIP-?(\d+)$/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxVipNum) maxVipNum = num;
+      }
+    });
+    return `VIP${maxVipNum + 1}`;
+  }
+
+  /**
+   * Menjana nombor meja biasa baharu secara automatik (T01, T02, ...)
+   */
+  static getNextTableNumber(tables: RestaurantTable[]): string {
+    let maxT = 0;
+    tables.forEach((t) => {
+      const match = t.tableNumber.match(/^T(\d+)$/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxT) maxT = num;
+      }
+    });
+    return `T${String(maxT + 1).padStart(2, '0')}`;
+  }
+
+  /**
    * Menambah atau mengemas kini struktur Meja (Kapasiti, Zon, Nombor)
    */
   static saveTableDefinition(
@@ -342,9 +441,22 @@ export class TableService {
     if (tableData.id) {
       const updated = tables.map((tbl) => {
         if (tbl.id === tableData.id) {
+          let tableNumber = (tableData.tableNumber || tbl.tableNumber).trim().toUpperCase();
+          const vipMatch = tableNumber.match(/^VIP[-\s]?(\d+)$/i);
+          if (vipMatch) tableNumber = `VIP${parseInt(vipMatch[1], 10)}`;
+
+          // Pengesahan pencegahan nombor meja bertindih (SES v4.5)
+          const isDuplicate = tables.some(
+            (other) => other.id !== tbl.id && other.tableNumber.trim().toUpperCase() === tableNumber
+          );
+          if (isDuplicate) {
+            throw new Error(`Nombor meja "${tableNumber}" sudah wujud. Sila pilih nombor lain.`);
+          }
+
           return {
             ...tbl,
             ...tableData,
+            tableNumber,
             updatedAt: now,
           };
         }
@@ -353,11 +465,37 @@ export class TableService {
       this.saveTables(updated, workspaceSlug);
       return updated;
     } else {
+      let finalTableNumber = (tableData.tableNumber || '').trim().toUpperCase();
+      const finalZone = tableData.zone.trim() || 'Dalam';
+
+      // Selaras format jika ditaip VIP-1 / VIP 1 / vip-2 -> VIP1 / VIP2
+      const vipMatch = finalTableNumber.match(/^VIP[-\s]?(\d+)$/i);
+      if (vipMatch) {
+        finalTableNumber = `VIP${parseInt(vipMatch[1], 10)}`;
+      }
+
+      // Jika nombor meja tidak diisi, berikan nombor auto mengikut zon
+      if (!finalTableNumber) {
+        if (finalZone === 'Bilik VIP') {
+          finalTableNumber = this.getNextVipTableNumber(tables);
+        } else {
+          finalTableNumber = this.getNextTableNumber(tables);
+        }
+      }
+
+      // Pengesahan pencegahan nombor meja bertindih (SES v4.5)
+      const isDuplicate = tables.some(
+        (tbl) => tbl.tableNumber.trim().toUpperCase() === finalTableNumber
+      );
+      if (isDuplicate) {
+        throw new Error(`Nombor meja "${finalTableNumber}" sudah wujud. Sila gunakan nombor meja lain.`);
+      }
+
       const newTable: RestaurantTable = {
         id: `tbl-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         storeId: workspaceSlug,
-        tableNumber: tableData.tableNumber.trim().toUpperCase(),
-        zone: tableData.zone.trim() || 'Dewan Utama',
+        tableNumber: finalTableNumber,
+        zone: finalZone,
         capacity: Number(tableData.capacity) || 4,
         status: 'AVAILABLE',
         updatedAt: now,
@@ -385,7 +523,19 @@ export class TableService {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          return parsed;
+          let resMigrated = false;
+          const cleaned = parsed.map((r: TableReservation) => {
+            const m = r.tableNumber?.match(/^VIP-(\d+)$/i);
+            if (m) {
+              resMigrated = true;
+              return { ...r, tableNumber: `VIP${m[1]}` };
+            }
+            return r;
+          });
+          if (resMigrated) {
+            this.saveReservations(cleaned, workspaceSlug);
+          }
+          return cleaned;
         }
       }
     } catch (e) {
@@ -411,7 +561,7 @@ export class TableService {
   ): { reservation: TableReservation; tables: RestaurantTable[] } {
     const reservations = this.getReservations(workspaceSlug);
     const now = new Date().toISOString();
-    const todayStr = now.split('T')[0];
+    const todayStr = getLocalDateString();
     const newRes: TableReservation = {
       ...input,
       id: `res-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,

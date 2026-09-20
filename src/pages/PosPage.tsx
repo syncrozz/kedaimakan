@@ -553,13 +553,19 @@ export const PosPage: React.FC = () => {
     return CustomerService.searchCustomers(customerSearchQuery, activeList);
   }, [customers, customerSearchQuery]);
 
-  // Today's recent sales
-  const todayPrefix = new Date().toISOString().split('T')[0];
+  // Today's recent sales (menggunakan perbandingan tarikh kalendar tempatan pengguna)
   const todaySales = useMemo(() => {
-    return sales.filter(
-      (s) => s.status === 'COMPLETED' && s.dateTime.startsWith(todayPrefix)
-    );
-  }, [sales, todayPrefix]);
+    const today = new Date();
+    return sales.filter((s) => {
+      if (s.status !== 'COMPLETED') return false;
+      const d = new Date(s.dateTime);
+      return (
+        d.getFullYear() === today.getFullYear() &&
+        d.getMonth() === today.getMonth() &&
+        d.getDate() === today.getDate()
+      );
+    });
+  }, [sales]);
 
   const scrollToCart = () => {
     const cartEl = document.getElementById('pos-cart-section');
@@ -575,11 +581,8 @@ export const PosPage: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-stone-900 tracking-tight">
-              {posMode === 'RESTAURANT' ? 'POS Restoran & Kedai Makan' : 'POS Runcit & Barcode'}
+              {posMode === 'RESTAURANT' ? 'POS Restoran' : 'POS Runcit & Barcode'}
             </h1>
-            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-              {posMode === 'RESTAURANT' ? 'Fasa 2 Restoran' : 'Cash Active'}
-            </span>
           </div>
           <p className="text-xs text-stone-500 mt-0.5">
             {posMode === 'RESTAURANT'
@@ -602,7 +605,7 @@ export const PosPage: React.FC = () => {
               }`}
             >
               <UtensilsCrossed className="w-3.5 h-3.5" />
-              <span>Restoran (Fasa 2)</span>
+              <span>Restoran</span>
             </button>
             <button
               type="button"

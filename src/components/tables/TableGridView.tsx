@@ -43,7 +43,8 @@ export const TableGridView: React.FC<TableGridViewProps> = ({
   const zones = useMemo(() => {
     const set = new Set<string>();
     tables.forEach((t) => {
-      if (t.zone) set.add(t.zone);
+      const z = t.zone?.toLowerCase() === 'dewan utama' ? 'Dalam' : t.zone;
+      if (z) set.add(z);
     });
     return Array.from(set);
   }, [tables]);
@@ -93,7 +94,8 @@ export const TableGridView: React.FC<TableGridViewProps> = ({
   // Penapisan meja mengikut zon dan status
   const filteredTables = useMemo(() => {
     return tables.filter((tbl) => {
-      const matchZone = selectedZone === 'ALL' || tbl.zone === selectedZone;
+      const tblZone = tbl.zone?.toLowerCase() === 'dewan utama' ? 'Dalam' : tbl.zone;
+      const matchZone = selectedZone === 'ALL' || tblZone === selectedZone;
       const matchStatus = statusFilter === 'ALL' || tbl.status === statusFilter;
       return matchZone && matchStatus;
     });
@@ -269,7 +271,9 @@ export const TableGridView: React.FC<TableGridViewProps> = ({
           </button>
 
           {zones.map((zone) => {
-            const countInZone = tables.filter((t) => t.zone === zone).length;
+            const countInZone = tables.filter(
+              (t) => (t.zone?.toLowerCase() === 'dewan utama' ? 'Dalam' : t.zone) === zone
+            ).length;
             return (
               <button
                 key={zone}
@@ -395,11 +399,19 @@ export const TableGridView: React.FC<TableGridViewProps> = ({
                 <div>
                   <div className="flex items-start justify-between gap-1 mb-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-9 h-9 rounded-xl bg-stone-950 border border-stone-800 flex items-center justify-center font-mono font-bold text-sm text-white">
-                        {table.tableNumber}
+                      <div
+                        className={`h-9 min-w-[2.25rem] px-2 rounded-xl border flex items-center justify-center font-mono font-bold text-sm ${
+                          table.tableNumber.startsWith('VIP')
+                            ? 'bg-amber-950/40 border-amber-500/40 text-amber-300'
+                            : 'bg-stone-950 border-stone-800 text-white'
+                        }`}
+                      >
+                        {table.tableNumber.replace(/^VIP-(\d+)$/i, 'VIP$1')}
                       </div>
                       <div>
-                        <span className="text-[10px] text-stone-400 block leading-tight">{table.zone}</span>
+                        <span className="text-[10px] text-stone-400 block leading-tight">
+                          {table.zone?.toLowerCase() === 'dewan utama' ? 'Dalam' : table.zone}
+                        </span>
                         <div className="flex items-center gap-1 text-[11px] text-stone-400 mt-0.5">
                           <Users className="w-3 h-3 text-stone-500" />
                           <span>{table.capacity} Pax</span>
@@ -455,8 +467,8 @@ export const TableGridView: React.FC<TableGridViewProps> = ({
                 </div>
 
                 {/* Bawah: Maklumat Pesanan Aktif jika diduduki atau menunggu bayaran */}
-                <div className="pt-2 border-t border-stone-800/60 mt-2">
-                  {table.activeOrder ? (
+                {table.activeOrder && (
+                  <div className="pt-2 border-t border-stone-800/60 mt-2">
                     <div className="flex items-center justify-between text-xs font-mono">
                       <div className="flex items-center gap-1 text-stone-400">
                         <Receipt className="w-3 h-3 text-sky-400" />
@@ -466,13 +478,8 @@ export const TableGridView: React.FC<TableGridViewProps> = ({
                         {formatCurrency(table.activeOrder.netAmount)}
                       </span>
                     </div>
-                  ) : (
-                    <div className="flex items-center justify-between text-[11px] text-stone-500">
-                      <span>Status</span>
-                      <span className="font-medium text-stone-400">{config.label}</span>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             );
           })}

@@ -125,7 +125,7 @@ export const KitchenPinLoginModal: React.FC<KitchenPinLoginModalProps> = ({
         </div>
 
         <h2 className="text-xl font-black text-white tracking-tight">
-          Akses KDS Dapur
+          Akses Dapur
         </h2>
         <p className="text-xs text-stone-400 mt-1">
           Ruang Kerja: <span className="text-amber-400 font-semibold">{workspaceName || workspaceSlug}</span>

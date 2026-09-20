@@ -295,7 +295,7 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-1.5">
-                <span>KDS DAPUR</span>
+                <span>DAPUR</span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
                   SES v4.5
                 </span>
@@ -460,7 +460,7 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
           <div className="flex items-center gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
             <span>
-              <strong>Perhatian Keselamatan PIN Dapur:</strong> Akses KDS Dapur sedang menggunakan PIN Lalai (9999/8888). Sila tukar PIN Dapur untuk menjamin privasi operasi kedai anda.
+              <strong>Perhatian Keselamatan PIN Dapur:</strong> Akses Dapur sedang menggunakan PIN Lalai (9999/8888). Sila tukar PIN Dapur untuk menjamin privasi operasi kedai anda.
             </span>
           </div>
           <button

@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { Purchase, PurchaseStatus, Product } from '../types';
-import { formatCurrency, formatDateTime } from '../services/formatters';
+import { formatCurrency, formatDateTime, getLocalDateString } from '../services/formatters';
 import { PurchasingService } from '../services/purchasingService';
 import { ProductSearchPicker } from '../components/purchases/ProductSearchPicker';
 
@@ -103,7 +103,7 @@ export const PurchasesPage: React.FC<PurchasesPageProps> = ({ onNavigate }) => {
 
   // New Purchase Form State
   const [formSupplierId, setFormSupplierId] = useState('');
-  const [formDate, setFormDate] = useState(() => new Date().toISOString().substring(0, 10));
+  const [formDate, setFormDate] = useState(() => getLocalDateString());
   const [formNotes, setFormNotes] = useState('');
   const [formDiscount, setFormDiscount] = useState<number>(0);
   const [formItems, setFormItems] = useState<
@@ -308,7 +308,7 @@ export const PurchasesPage: React.FC<PurchasesPageProps> = ({ onNavigate }) => {
 
   const openNewPurchaseModal = () => {
     setFormSupplierId(activeSuppliers[0]?.id || '');
-    setFormDate(new Date().toISOString().substring(0, 10));
+    setFormDate(getLocalDateString());
     setFormNotes('');
     setFormDiscount(0);
     setFormItems([]);

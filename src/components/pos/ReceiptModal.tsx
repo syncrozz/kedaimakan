@@ -143,6 +143,13 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               </div>
             )}
 
+            {sale.tax !== undefined && sale.tax > 0 && (
+              <div className="flex justify-between text-xs text-stone-600">
+                <span>Tax / SST</span>
+                <span className="font-bold">{store.currency} {sale.tax.toFixed(2)}</span>
+              </div>
+            )}
+
             <div className="flex justify-between text-base font-black text-stone-900 pt-2 border-t-2 border-stone-900">
               <span>TOTAL</span>
               <span>{store.currency} {sale.total.toFixed(2)}</span>

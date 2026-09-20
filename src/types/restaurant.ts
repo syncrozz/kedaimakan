@@ -15,6 +15,14 @@ export type TableStatus =
 
 export type KitchenStation = 'KITCHEN' | 'BAR' | 'DESSERT';
 
+export interface MenuVariant {
+  id: string;
+  name: string; // cth: "Biasa", "Besar", "Panas", "Sejuk", "Bungkus"
+  price: number; // Harga jualan bagi variasi ini (RM)
+  costPrice?: number;
+  isDefault?: boolean;
+}
+
 export interface MenuModifierOption {
   id: string;
   name: string; // cth: "Ais", "Kurang Manis", "Telur Mata", "Extra Sambal"
@@ -35,11 +43,12 @@ export interface MenuItem {
   code: string; // cth: "M-01", "D-03"
   name: string; // cth: "Nasi Lemak Ayam Berempah"
   category: string; // cth: "Makanan Utama", "Minuman", "Sampingan"
-  price: number; // Harga jualan dalam RM
+  price: number; // Harga jualan asas dalam RM
   costPrice: number; // Anggaran kos
   isAvailable: boolean; // Kawalan ketersediaan manual (Tersedia / Habis)
   kitchenStation: KitchenStation;
   modifierGroups?: MenuModifierGroup[];
+  variants?: MenuVariant[]; // Variasi saiz atau pilihan harga berbeza
   imageUrl?: string;
   description?: string;
   active: boolean;
@@ -55,6 +64,12 @@ export interface SelectedModifierSnapshot {
   price: number;
 }
 
+export interface SelectedVariantSnapshot {
+  id: string;
+  name: string;
+  price: number;
+}
+
 export type DiscountType = 'PERCENTAGE' | 'FIXED' | 'NONE';
 
 export interface RestaurantOrderItem {
@@ -63,7 +78,8 @@ export interface RestaurantOrderItem {
   nameSnapshot: string;
   categorySnapshot: string;
   kitchenStation: KitchenStation;
-  basePriceSnapshot: number; // Harga asas satu unit
+  basePriceSnapshot: number; // Harga asas satu unit (mengambil kira variasi jika dipilih)
+  selectedVariant?: SelectedVariantSnapshot; // Snapshot variasi terpilih
   selectedModifiers: SelectedModifierSnapshot[];
   unitTotal: number; // basePriceSnapshot + jumlah modifiers per unit
   quantity: number;
@@ -146,7 +162,7 @@ export interface RestaurantActiveOrderSummary {
 export interface RestaurantTable {
   id: string;
   storeId: string; // Tenant / Workspace ID
-  tableNumber: string; // cth: "T01", "T02", "VIP-1"
+  tableNumber: string; // cth: "T01", "T02", "VIP1", "VIP2"
   zone: string; // cth: "Utama", "Luar / Terbuka", "Bilik VIP"
   capacity: number; // Bilangan kerusi (pax)
   status: TableStatus;
@@ -236,4 +252,48 @@ export interface KitchenAuthSession {
   authenticatedAt: string;
   expiresAt: number;
 }
+
+// ==========================================
+// BUSINESS TEMPLATE & CONFIGURATION ENGINE
+// SES v4.5 — ARCHITECTURE ADJUSTMENT
+// ==========================================
+
+export type BusinessTemplateId = 'MAMAK_CAPATI' | 'TOMYAM' | 'CAFE' | 'GERAI' | 'CUSTOM';
+
+export type TableManagementMode = 'FULL' | 'TABLE_NUMBER_ONLY' | 'DISABLED';
+
+export interface KitchenStationDefinition {
+  id: string; // cth: "KITCHEN", "BAR", "DESSERT", "GRILL"
+  name: string; // cth: "Dapur Panas", "Bar Minuman", "Kaunter Roti & Capati"
+  description?: string;
+}
+
+export interface BusinessTemplate {
+  id: BusinessTemplateId;
+  name: string; // cth: "Mamak / Capati (Wali Capati Nan)"
+  subtitle: string;
+  description: string;
+  badge: string;
+  defaultOrderTypes: RestaurantOrderType[];
+  tableMode: TableManagementMode;
+  defaultPax: number;
+  defaultCategories: string[];
+  kitchenStations: KitchenStationDefinition[];
+  sampleModifiers: MenuModifierGroup[];
+  sampleMenuItems: Omit<MenuItem, 'id' | 'storeId' | 'createdAt' | 'updatedAt'>[];
+}
+
+export interface BusinessConfiguration {
+  workspaceSlug: string;
+  templateId: BusinessTemplateId;
+  templateName: string;
+  enabledOrderTypes: RestaurantOrderType[]; // Pilihan jenis pesanan yang diaktifkan
+  tableMode: TableManagementMode; // Mod pengurusan meja
+  defaultPax: number;
+  categories: string[];
+  kitchenStations: KitchenStationDefinition[];
+  appliedAt: string;
+  updatedAt: string;
+}
+
 

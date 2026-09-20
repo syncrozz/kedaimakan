@@ -73,7 +73,7 @@ export class SecurityVerificationRunner {
         status: !keysCollision ? 'PASSED' : 'FAILED',
         expected: 'Storage keys between Client Alpha and Client Beta must be mutually disjoint',
         actual: !keysCollision ? 'Keys completely partitioned' : 'Key collision detected',
-        details: 'Guarantees browser cache separation so Client A data is never visible to Client B.',
+        details: 'Enforces browser cache partitioning to prevent Client A data from being retrieved by Client B.',
       });
     } catch (e: any) {
       results.push({
@@ -187,7 +187,7 @@ export class SecurityVerificationRunner {
         status: isV1Blocked ? 'PASSED' : 'FAILED',
         expected: 'All attempts to access or bind NiagaPOS V1 project must be blocked',
         actual: 'Decoupled and verified zero active V1 connection',
-        details: 'Guarantees absolute data segregation between legacy store and NiagaPOS V2 workspaces.',
+        details: 'Enforces explicit data segregation between legacy store and NiagaPOS V2 workspaces via scoped configuration.',
       });
     } catch (e: any) {
       results.push({

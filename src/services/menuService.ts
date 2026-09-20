@@ -218,19 +218,47 @@ export class MenuService {
   static getMenuItems(workspaceId: string = 'default'): MenuItem[] {
     try {
       const raw = localStorage.getItem(this.getStorageKey(workspaceId));
-      if (raw) {
+      if (raw !== null) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        // Authoritative data is authoritative: An empty array is a valid state
+        if (Array.isArray(parsed)) {
           return parsed;
         }
+      }
+      // Check if user has explicitly cleared or started empty
+      const isCleared = localStorage.getItem(`syncrozz_menu_cleared_${workspaceId}`) === 'true';
+      if (isCleared) {
+        return [];
       }
     } catch (e) {
       console.warn('Gagal membaca cache menu dari localStorage:', e);
     }
-    // Jika belum ada data menu dalam workspace ini, mulakan dengan menu cadangan asas
+    // Hanya jika storan belum wujud langsung bagi workspace baharu
     const initial = INITIAL_RESTAURANT_MENU.map(m => ({ ...m, storeId: workspaceId }));
     this.saveMenuItems(initial, workspaceId);
     return initial;
+  }
+
+  /**
+   * Muat data contoh hanya atas permintaan jelas pengguna (Explicit User Action)
+   */
+  static loadSampleMenu(workspaceId: string = 'default'): MenuItem[] {
+    const initial = INITIAL_RESTAURANT_MENU.map(m => ({ ...m, storeId: workspaceId }));
+    this.saveMenuItems(initial, workspaceId);
+    localStorage.removeItem(`syncrozz_menu_cleared_${workspaceId}`);
+    return initial;
+  }
+
+  /**
+   * Mengosongkan data menu tanpa kebangkitan semula automatik
+   */
+  static clearMenu(workspaceId: string = 'default'): void {
+    this.saveMenuItems([], workspaceId);
+    try {
+      localStorage.setItem(`syncrozz_menu_cleared_${workspaceId}`, 'true');
+    } catch (e) {
+      console.error('Gagal menetapkan tanda menu kosong:', e);
+    }
   }
 
   static saveMenuItems(items: MenuItem[], workspaceId: string = 'default'): void {

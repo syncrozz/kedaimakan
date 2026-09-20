@@ -123,6 +123,7 @@ export class StorageService {
 
   /**
    * Generates a complete, structured backup payload containing all domain records.
+   * Includes human-readable manifest and tenant/workspace metadata.
    */
   public static createBackupPayload(data: {
     store: Store;
@@ -134,11 +135,36 @@ export class StorageService {
     customers: Customer[];
     loyaltyLedger: LoyaltyLedgerEntry[];
     staffUsers: StaffUser[];
+    workspaceSlug?: string;
+    menuItems?: any[];
+    tables?: any[];
+    businessConfig?: any;
+    taxConfig?: any;
+    reservations?: any[];
   }): StoreBackupPayload {
+    const exportedAt = new Date().toISOString();
+    const manifest = {
+      storeName: data.store.name,
+      workspaceSlug: data.workspaceSlug || data.store.code || 'default',
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      productsCount: data.products.length,
+      salesCount: data.sales.length,
+      suppliersCount: data.suppliers.length,
+      purchasesCount: data.purchases.length,
+      customersCount: data.customers.length,
+      staffCount: data.staffUsers.length,
+      movementsCount: data.movements.length,
+      menuItemsCount: data.menuItems?.length || 0,
+      tablesCount: data.tables?.length || 0,
+      exportedAt,
+    };
+
     return {
       schemaVersion: CURRENT_SCHEMA_VERSION,
-      system: 'NiagaPOS',
-      exportedAt: new Date().toISOString(),
+      system: 'SYNCROZZ KEDAI MAKAN / NiagaPOS',
+      exportedAt,
+      workspaceSlug: data.workspaceSlug || data.store.code,
+      manifest,
       store: data.store,
       products: data.products,
       movements: data.movements,
@@ -148,6 +174,11 @@ export class StorageService {
       customers: data.customers,
       loyaltyLedger: data.loyaltyLedger,
       staffUsers: data.staffUsers,
+      menuItems: data.menuItems,
+      tables: data.tables,
+      businessConfig: data.businessConfig,
+      taxConfig: data.taxConfig,
+      reservations: data.reservations,
     };
   }
 
@@ -214,6 +245,8 @@ export class StorageService {
       schemaVersion: obj.schemaVersion,
       system: obj.system || 'NiagaPOS',
       exportedAt: obj.exportedAt || new Date().toISOString(),
+      workspaceSlug: obj.workspaceSlug || obj.store?.code,
+      manifest: obj.manifest,
       store: obj.store,
       products: obj.products,
       movements: obj.movements,
@@ -223,6 +256,11 @@ export class StorageService {
       customers: obj.customers,
       loyaltyLedger: obj.loyaltyLedger,
       staffUsers: obj.staffUsers,
+      menuItems: Array.isArray(obj.menuItems) ? obj.menuItems : undefined,
+      tables: Array.isArray(obj.tables) ? obj.tables : undefined,
+      businessConfig: obj.businessConfig,
+      taxConfig: obj.taxConfig,
+      reservations: Array.isArray(obj.reservations) ? obj.reservations : undefined,
     };
 
     return {

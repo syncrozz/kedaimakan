@@ -60,9 +60,12 @@ import {
   TableReservation,
   TableStatusAuditEntry,
   RestaurantActiveOrderSummary,
+  BusinessConfiguration,
+  BusinessTemplateId,
 } from '../types/restaurant';
 import { MenuService, DEFAULT_TAX_CONFIG } from '../services/menuService';
 import { TableService } from '../services/tableService';
+import { TemplateService } from '../services/templateService';
 
 export interface ClearCategoriesOptions {
   products?: boolean;
@@ -164,6 +167,14 @@ interface StoreContextType {
   exportStoreData: () => StoreBackupPayload;
   downloadBackup: () => void;
   restoreStoreData: (payload: StoreBackupPayload) => { success: boolean; message: string };
+  // SYNCROZZ KEDAI MAKAN - Business Template & Flexible Configuration (SES v4.5)
+  businessConfig: BusinessConfiguration;
+  updateBusinessConfig: (config: BusinessConfiguration) => void;
+  applyBusinessTemplate: (
+    templateId: BusinessTemplateId,
+    options?: { loadSampleMenu?: boolean; resetExistingMenu?: boolean; updateTableMode?: boolean }
+  ) => void;
+  refreshBusinessConfig: () => void;
   // SYNCROZZ KEDAI MAKAN - Restaurant Menu Operations (Fasa 2 - SES v4.5)
   menuItems: MenuItem[];
   menuCategories: string[];
@@ -2073,6 +2084,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   };
 
+  // SYNCROZZ KEDAI MAKAN - Business Configuration State (SES v4.5)
+  const [businessConfig, setBusinessConfig] = useState<BusinessConfiguration>(() => {
+    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+    const slug = currentRoute.workspaceSlug || 'default';
+    return TemplateService.getBusinessConfig(slug);
+  });
+
   // SYNCROZZ KEDAI MAKAN - Restaurant Menu & Tax Operations (Fasa 2 - SES v4.5)
   const [menuItems, setMenuItems] = useState<MenuItem[]>(() => {
     const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
@@ -2086,17 +2104,48 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return MenuService.getTaxConfig(slug);
   });
 
+  const updateBusinessConfig = (newConfig: BusinessConfiguration) => {
+    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+    const slug = currentRoute.workspaceSlug || 'default';
+    const saved = TemplateService.saveBusinessConfig(newConfig, slug);
+    setBusinessConfig(saved);
+  };
+
+  const applyBusinessTemplate = (
+    templateId: BusinessTemplateId,
+    options?: { loadSampleMenu?: boolean; resetExistingMenu?: boolean; updateTableMode?: boolean }
+  ) => {
+    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+    const slug = currentRoute.workspaceSlug || 'default';
+    const res = TemplateService.applyTemplate(templateId, slug, options);
+    setBusinessConfig(res.config);
+    setMenuItems(MenuService.getMenuItems(slug));
+  };
+
+  const refreshBusinessConfig = () => {
+    const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
+    const slug = currentRoute.workspaceSlug || 'default';
+    setBusinessConfig(TemplateService.getBusinessConfig(slug));
+    setMenuItems(MenuService.getMenuItems(slug));
+  };
+
   const menuCategories = React.useMemo(() => {
     const set = new Set<string>();
+    // Kekalkan kategori yang telah dikonfigurasi oleh owner
+    if (businessConfig?.categories) {
+      businessConfig.categories.forEach((c) => {
+        if (c.trim()) set.add(c.trim());
+      });
+    }
     menuItems.forEach((m) => {
-      if (m.category) set.add(m.category);
+      if (m.category) set.add(m.category.trim());
     });
     if (set.size === 0) {
       set.add('Makanan Utama');
       set.add('Minuman');
     }
     return Array.from(set);
-  }, [menuItems]);
+  }, [menuItems, businessConfig]);
 
   const toggleMenuItemAvailability = (menuItemId: string) => {
     const currentRoute = typeof window !== 'undefined' ? parseRoute(window.location.pathname) : { workspaceSlug: null };
@@ -2296,6 +2345,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         lastCloudSync,
         syncAllToCloud,
         pullAllFromCloud,
+        businessConfig,
+        updateBusinessConfig,
+        applyBusinessTemplate,
+        refreshBusinessConfig,
         menuItems,
         menuCategories,
         taxConfig,

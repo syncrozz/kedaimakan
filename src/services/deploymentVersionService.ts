@@ -1,23 +1,25 @@
 /**
  * NiagaPOS V2 - Deployment Version & Session Continuity Service
- * SES v4.5 — MANDATORY REQUIREMENT
+ * SES v4.5 — MANDATORY REQUIREMENT (VG-01 to VG-11 Framework)
  *
- * Directives:
- * 1. Detect application version changes using existing architecture.
- * 2. Ensure updated assets (JS, CSS, Service Worker) load correctly.
- * 3. Preserve valid authentication sessions during version transitions.
- * 4. Strictly protect contingent memberships, access history, and access activations from being cleared.
- * 5. Hard refresh used solely as recovery mechanism during asset/cache failures.
- * 6. Hard refresh never replaces server-side authorization.
- * 7. Do not force users to repeat access activation upon deployment.
- * 8. Accurate diagnostic invalidation engine:
- *    - SESSION_EXPIRED
- *    - TOKEN_REVOKED
- *    - AUTHORIZATION_CHANGED
- *    - WORKSPACE_ACCESS_REVOKED
- *    - DATA_CORRUPTION
- *    - ASSET_CACHE_ISSUE
- * 9. Ensure zero disruption to tenant/workspace isolation.
+ * Verification Gates Alignment:
+ * 1. VG-01: Detect application version changes using existing architecture.
+ * 2. VG-02: Ensure updated assets (JS, CSS, Service Worker) load correctly.
+ * 3. VG-03: Preserve valid authentication sessions during version transitions.
+ * 4. VG-04: Strictly protect contingent memberships, access history, and access activations from being cleared.
+ * 5. VG-05: Access activation state unbroken (zero repeated activations).
+ * 6. VG-06: Hard refresh used solely as recovery mechanism during asset/cache failures.
+ * 7. VG-07: Mandatory server-side authorization enforcement.
+ * 8. VG-08: Accurate diagnostic invalidation engine:
+ *           - SESSION_EXPIRED
+ *           - TOKEN_REVOKED
+ *           - AUTHORIZATION_CHANGED
+ *           - WORKSPACE_ACCESS_REVOKED
+ *           - DATA_CORRUPTION
+ *           - ASSET_CACHE_ISSUE
+ * 9. VG-09: Ensure zero disruption to tenant/workspace isolation.
+ * 10. VG-10: Cryptographic token verification & tampering defense (HTTP 401).
+ * 11. VG-11: Cross-tenant authorization enforcement & horizontal privilege escalation defense (HTTP 403).
  */
 
 import type { InvalidationReason, SessionDiagnosticResult, ClientAuthSession } from '../types/auth';

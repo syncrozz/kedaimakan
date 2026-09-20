@@ -230,10 +230,28 @@ export type ActivePage =
   | 'konsol'
   | 'kds';
 
+export interface StoreBackupManifest {
+  storeName: string;
+  workspaceSlug?: string;
+  schemaVersion: number;
+  productsCount: number;
+  salesCount: number;
+  suppliersCount: number;
+  purchasesCount: number;
+  customersCount: number;
+  staffCount: number;
+  movementsCount: number;
+  menuItemsCount?: number;
+  tablesCount?: number;
+  exportedAt: string;
+}
+
 export interface StoreBackupPayload {
   schemaVersion: number;
   system: string;
   exportedAt: string;
+  workspaceSlug?: string;
+  manifest?: StoreBackupManifest;
   store: Store;
   products: Product[];
   movements: InventoryMovement[];
@@ -243,6 +261,11 @@ export interface StoreBackupPayload {
   customers: Customer[];
   loyaltyLedger: LoyaltyLedgerEntry[];
   staffUsers: StaffUser[];
+  menuItems?: any[];
+  tables?: any[];
+  businessConfig?: any;
+  taxConfig?: any;
+  reservations?: any[];
 }
 
 export type CsvImportMode = 'MASTER_SYNC' | 'SKIP_EXISTING' | 'UPDATE_EXISTING';

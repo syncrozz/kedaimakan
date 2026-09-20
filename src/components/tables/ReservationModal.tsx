@@ -3,9 +3,10 @@
  * Membolehkan pendaftaran tempahan meja baharu atau kemas kini status tempahan.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RestaurantTable, TableReservation } from '../../types/restaurant';
 import { X, Calendar, Clock, Users, Phone, User, CheckCircle2, AlertCircle } from 'lucide-react';
+import { getLocalDateString } from '../../services/formatters';
 
 interface ReservationModalProps {
   isOpen: boolean;
@@ -24,14 +25,10 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   onClose,
   onAddReservation,
 }) => {
-  if (!isOpen || !table) return null;
-
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [pax, setPax] = useState<number>(table.capacity || 4);
-  const [reservationDate, setReservationDate] = useState(() => {
-    return new Date().toISOString().split('T')[0];
-  });
+  const [pax, setPax] = useState<number>(table?.capacity || 4);
+  const [reservationDate, setReservationDate] = useState(() => getLocalDateString());
   const [reservationTime, setReservationTime] = useState(() => {
     // Default 1 jam dari sekarang
     const d = new Date();
@@ -41,6 +38,22 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
   const [setTableStatusReserved, setSetTableStatusReserved] = useState(true);
   const [notes, setNotes] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Setiap kali modal dibuka, pastikan tarikh diselaraskan mengikut tarikh semasa pengguna
+  useEffect(() => {
+    if (isOpen && table) {
+      setReservationDate(getLocalDateString());
+      setPax(table.capacity || 4);
+      const d = new Date();
+      d.setHours(d.getHours() + 1);
+      setReservationTime(
+        `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+      );
+      setErrorMsg(null);
+    }
+  }, [isOpen, table]);
+
+  if (!isOpen || !table) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,6 +164,7 @@ export const ReservationModal: React.FC<ReservationModalProps> = ({
                 <input
                   type="date"
                   required
+                  min={getLocalDateString()}
                   value={reservationDate}
                   onChange={(e) => setReservationDate(e.target.value)}
                   className="w-full bg-stone-950 border border-stone-800 rounded-lg pl-9 pr-2 py-2 text-white font-mono focus:outline-none focus:ring-1 focus:ring-purple-500"

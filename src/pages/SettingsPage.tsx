@@ -45,6 +45,7 @@ import { ChangeKitchenPinModal } from '../components/auth/ChangeKitchenPinModal'
 import { KitchenAuthService } from '../services/kitchenAuthService';
 import { CsvService } from '../services/csvService';
 import { EntityCsvImportModal } from '../components/common/EntityCsvImportModal';
+import { BusinessTemplateSettings } from '../components/settings/BusinessTemplateSettings';
 
 export const SettingsPage: React.FC = () => {
   const {
@@ -514,6 +515,9 @@ export const SettingsPage: React.FC = () => {
           </div>
         </form>
       </div>
+
+      {/* SYNCROZZ KEDAI MAKAN - Business Template & Flexible Configuration (SES v4.5) */}
+      <BusinessTemplateSettings />
 
       {/* Optional Retail Modules Settings (Part 07) */}
       <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-xs">

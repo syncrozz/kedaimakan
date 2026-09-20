@@ -31,6 +31,7 @@ import { ProductService } from './productService';
 import { CreateSupplierInput, UpdateSupplierInput, SupplierService } from './supplierService';
 import { CreateCustomerInput, UpdateCustomerInput, CustomerService } from './customerService';
 import { CreateStaffInput, UpdateStaffInput, StaffService } from './staffService';
+import { getLocalDateString } from './formatters';
 
 export interface CsvImportValidationResult<T> {
   totalRows: number;
@@ -291,7 +292,7 @@ export class CsvService {
       s.active ? 'ACTIVE' : 'INACTIVE',
     ]);
 
-    const dateStr = new Date().toISOString().slice(0, 10);
+    const dateStr = getLocalDateString();
     this.downloadCsv(`niagapos_v2_suppliers_${dateStr}.csv`, headers, rows);
   }
 
@@ -328,7 +329,7 @@ export class CsvService {
       ];
     });
 
-    const dateStr = new Date().toISOString().slice(0, 10);
+    const dateStr = getLocalDateString();
     this.downloadCsv(`niagapos_v2_customers_${dateStr}.csv`, headers, rows);
   }
 
@@ -350,7 +351,7 @@ export class CsvService {
       s.active ? 'ACTIVE' : 'INACTIVE',
     ]);
 
-    const dateStr = new Date().toISOString().slice(0, 10);
+    const dateStr = getLocalDateString();
     this.downloadCsv(`niagapos_v2_staff_${dateStr}.csv`, headers, rows);
   }
 

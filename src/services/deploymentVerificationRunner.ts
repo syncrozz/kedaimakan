@@ -1,6 +1,19 @@
 /**
  * NiagaPOS V2 - Deployment Version & Session Continuity Verification Suite
- * SES v4.5 — MANDATORY REQUIREMENT VERIFICATION (VG-01 to VG-09)
+ * SES v4.5 — MANDATORY REQUIREMENT VERIFICATION (VG-01 to VG-11)
+ *
+ * Verification Gates:
+ * - VG-01: Frontend Version Change Detection
+ * - VG-02: Updated Assets & Service Worker Cache Freshness
+ * - VG-03: Valid Authentication Session Preservation
+ * - VG-04: Contingent Membership Protection (No Wipe)
+ * - VG-05: Access Activation State Unbroken (No Re-Activation Prompt)
+ * - VG-06: Hard Refresh Solely as Recovery Mechanism
+ * - VG-07: Mandatory Server-Side Authorization Enforcement
+ * - VG-08: Precise Session Invalidation Diagnostics (All 6 Categories Individually)
+ * - VG-09: Tenant & Workspace Storage Isolation Continuity
+ * - VG-10: Cryptographic Token Signature Verification & Tampering Defense (HTTP 401)
+ * - VG-11: Cross-Tenant Authorization & Privilege Escalation Defense (HTTP 403)
  */
 
 import { DeploymentVersionService, CURRENT_PLATFORM_VERSION } from './deploymentVersionService';
@@ -477,14 +490,14 @@ export class DeploymentVerificationRunner {
     }
 
     // ========================================================================
-    // VG-10: Negative Authorization Tampering Protection
-    // Ensures client cannot gain access by fabricating localStorage/sessionStorage,
-    // altering workspaceSlug, or providing a forged token.
+    // VG-10: Cryptographic Token Signature Verification & Tampering Defense
+    // Validates that forged, modified, or re-signed bearer tokens are
+    // cryptographically evaluated and rejected by the server (HTTP 401).
     // ========================================================================
     try {
-      // 1. Forged payload injected into localStorage
+      // 1. Forged payload injected into test context
       const forgedSession: ClientAuthSession = {
-        token: 'forged_fake_token_attacker_cannot_sign_hmac',
+        token: 'forged_fake_token_unauthorized_hmac_test',
         workspaceId: 'ws_victim_cafe',
         workspaceSlug: 'victim_cafe',
         workspaceName: 'Victim Cafe',
@@ -495,7 +508,7 @@ export class DeploymentVerificationRunner {
         expiresAt: Date.now() + 86400000,
       };
 
-      // Attacker attempts to verify forged token with server
+      // Client attempts to verify forged token with server
       const verifyForgedRes = await fetch(`${getBaseUrl()}/api/auth/client/verify`, {
         method: 'POST',
         headers: {
@@ -506,11 +519,37 @@ export class DeploymentVerificationRunner {
       });
       const verifyForgedData = await verifyForgedRes.json().catch(() => null);
 
-      // Server must reject with 401
+      // Server must reject with HTTP 401
       const isForgedTokenRejected = verifyForgedRes.status === 401 && verifyForgedData?.valid === false;
 
-      // 2. Cross-tenant tampering: Attacker takes valid token for 'attacker_store' and uses it against 'victim_cafe'
-      // We will generate a real token for 'attacker_store' first
+      results.push({
+        id: 'VG-10',
+        name: 'Cryptographic Token Signature Verification & Tampering Defense',
+        category: 'SECURITY',
+        passed: isForgedTokenRejected,
+        expected: 'Token rekaan atau tanpa tandatangan HMAC-SHA256 sah ditolak oleh pelayan dengan status HTTP 401 Unauthorized',
+        actual: `Status HTTP: ${verifyForgedRes.status}, valid: ${verifyForgedData?.valid}, reason: ${verifyForgedData?.reason || 'TOKEN_REVOKED'}`,
+        evidence: 'server.ts /api/auth/client/verify mengesahkan tandatangan HMAC-SHA256 pelayan dan menolak sebarang token tidak sepadan.',
+      });
+    } catch (e: any) {
+      results.push({
+        id: 'VG-10',
+        name: 'Cryptographic Token Signature Verification & Tampering Defense',
+        category: 'SECURITY',
+        passed: false,
+        expected: 'Cryptographic rejection',
+        actual: `Ralat: ${e?.message}`,
+        evidence: 'Pengecualian semasa ujian.',
+      });
+    }
+
+    // ========================================================================
+    // VG-11: Cross-Tenant Authorization Enforcement & Privilege Escalation Defense
+    // Validates that a valid token issued for Workspace A presented against
+    // Workspace B is rejected by the server with HTTP 403 WORKSPACE_ACCESS_REVOKED.
+    // ========================================================================
+    try {
+      // Authenticate against tenant 'attacker_store' to obtain a validly signed token
       const loginRes = await fetch(`${getBaseUrl()}/api/auth/client/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -518,8 +557,11 @@ export class DeploymentVerificationRunner {
       });
       const loginData = await loginRes.json().catch(() => null);
       let isCrossTenantRejected = false;
+      let crossTenantStatus = 0;
+      let crossTenantReason = '';
 
       if (loginData?.session?.token) {
+        // Attempt to access 'victim_cafe' using tenant A's valid token
         const crossTenantRes = await fetch(`${getBaseUrl()}/api/auth/client/verify`, {
           method: 'POST',
           headers: {
@@ -528,29 +570,29 @@ export class DeploymentVerificationRunner {
           },
           body: JSON.stringify({ token: loginData.session.token, workspaceSlug: 'victim_cafe' }),
         });
+        crossTenantStatus = crossTenantRes.status;
         const crossTenantData = await crossTenantRes.json().catch(() => null);
-        // Server must reject with 403 WORKSPACE_ACCESS_REVOKED
+        crossTenantReason = crossTenantData?.reason || '';
+        // Server must reject with HTTP 403 WORKSPACE_ACCESS_REVOKED
         isCrossTenantRejected = crossTenantRes.status === 403 && crossTenantData?.reason === 'WORKSPACE_ACCESS_REVOKED';
       }
 
-      const passed = isForgedTokenRejected && isCrossTenantRejected;
-
       results.push({
-        id: 'VG-10',
-        name: 'Negative Authorization & Client Tampering Defense',
+        id: 'VG-11',
+        name: 'Cross-Tenant Authorization & Privilege Escalation Defense',
         category: 'SECURITY',
-        passed,
-        expected: 'Token palsu/rekaan mesti ditolak (HTTP 401). Token sah ruang kerja A yang digunakan untuk ruang kerja B mesti ditolak (HTTP 403 WORKSPACE_ACCESS_REVOKED).',
-        actual: `ForgedToken: HTTP ${verifyForgedRes.status} (valid=${verifyForgedData?.valid}) | CrossTenant: rejected=${isCrossTenantRejected}`,
-        evidence: 'server.ts mengesahkan tandatangan HMAC kriptografi dan menyemak pemadanan workspaceSlug terhadap muatan token pelayan.',
+        passed: isCrossTenantRejected,
+        expected: 'Token sah bagi ruang kerja A yang dikemukakan untuk ruang kerja B ditolak oleh pelayan dengan HTTP 403 WORKSPACE_ACCESS_REVOKED',
+        actual: `Status HTTP: ${crossTenantStatus}, Reason: ${crossTenantReason}, Ditolak: ${isCrossTenantRejected}`,
+        evidence: 'server.ts menguatkuasakan semakan padanan ketat antara workspaceSlug muatan token yang ditandatangani dan ruang kerja yang diminta.',
       });
     } catch (e: any) {
       results.push({
-        id: 'VG-10',
-        name: 'Negative Authorization & Client Tampering Defense',
+        id: 'VG-11',
+        name: 'Cross-Tenant Authorization & Privilege Escalation Defense',
         category: 'SECURITY',
         passed: false,
-        expected: 'Tampering defense',
+        expected: 'Cross-tenant rejection',
         actual: `Ralat: ${e?.message}`,
         evidence: 'Pengecualian semasa ujian.',
       });

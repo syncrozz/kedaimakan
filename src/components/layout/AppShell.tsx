@@ -80,7 +80,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 
   const navItems: { id: ActivePage; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: 'pos', label: 'POS', icon: ShoppingCart },
-    { id: 'kds', label: 'KDS Dapur', icon: ChefHat },
+    { id: 'kds', label: 'Dapur', icon: ChefHat },
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'products', label: 'Products', icon: Package },
     { id: 'inventory', label: 'Inventory', icon: Boxes },

@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
-import { MenuItem, MenuModifierGroup, SelectedModifierSnapshot } from '../../types/restaurant';
-import { X, Plus, Minus, Check, Utensils, AlertCircle } from 'lucide-react';
+import {
+  MenuItem,
+  MenuModifierGroup,
+  SelectedModifierSnapshot,
+  SelectedVariantSnapshot,
+  MenuVariant,
+} from '../../types/restaurant';
+import { X, Plus, Minus, Check, Utensils, AlertCircle, Layers } from 'lucide-react';
 import { formatCurrency } from '../../services/formatters';
 
 interface MenuItemModifierModalProps {
@@ -11,7 +17,8 @@ interface MenuItemModifierModalProps {
     item: MenuItem,
     quantity: number,
     selectedModifiers: SelectedModifierSnapshot[],
-    specialInstructions: string
+    specialInstructions: string,
+    selectedVariant?: SelectedVariantSnapshot
   ) => void;
 }
 
@@ -24,6 +31,20 @@ export const MenuItemModifierModal: React.FC<MenuItemModifierModalProps> = ({
   if (!isOpen || !menuItem) return null;
 
   const [quantity, setQuantity] = useState<number>(1);
+  
+  // Variasi Pilihan (e.g., Biasa / Besar, Panas / Sejuk / Bungkus)
+  const [selectedVariant, setSelectedVariant] = useState<SelectedVariantSnapshot | undefined>(() => {
+    if (menuItem.variants && menuItem.variants.length > 0) {
+      const defaultVar = menuItem.variants.find(v => v.isDefault) || menuItem.variants[0];
+      return {
+        id: defaultVar.id,
+        name: defaultVar.name,
+        price: defaultVar.price,
+      };
+    }
+    return undefined;
+  });
+
   const [selectedModifiers, setSelectedModifiers] = useState<SelectedModifierSnapshot[]>(() => {
     const initial: SelectedModifierSnapshot[] = [];
     // Auto-select single mandatory options if minSelection === 1
@@ -44,6 +65,14 @@ export const MenuItemModifierModal: React.FC<MenuItemModifierModalProps> = ({
   });
   const [specialInstructions, setSpecialInstructions] = useState<string>('');
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  const handleSelectVariant = (variant: MenuVariant) => {
+    setSelectedVariant({
+      id: variant.id,
+      name: variant.name,
+      price: variant.price,
+    });
+  };
 
   const handleToggleModifier = (group: MenuModifierGroup, optionId: string) => {
     setValidationError(null);
@@ -97,8 +126,9 @@ export const MenuItemModifierModal: React.FC<MenuItemModifierModalProps> = ({
   };
 
   const calculateUnitTotal = (): number => {
+    const base = selectedVariant ? selectedVariant.price : menuItem.price;
     const modifiersTotal = selectedModifiers.reduce((sum, mod) => sum + mod.price, 0);
-    return menuItem.price + modifiersTotal;
+    return base + modifiersTotal;
   };
 
   const unitTotal = calculateUnitTotal();
@@ -116,7 +146,7 @@ export const MenuItemModifierModal: React.FC<MenuItemModifierModalProps> = ({
       }
     }
 
-    onConfirm(menuItem, quantity, selectedModifiers, specialInstructions.trim());
+    onConfirm(menuItem, quantity, selectedModifiers, specialInstructions.trim(), selectedVariant);
     onClose();
   };
 
@@ -142,7 +172,7 @@ export const MenuItemModifierModal: React.FC<MenuItemModifierModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="text-stone-400 hover:text-white p-1 rounded-lg hover:bg-stone-800 transition-colors"
+            className="text-stone-400 hover:text-white p-1 rounded-lg hover:bg-stone-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -164,7 +194,50 @@ export const MenuItemModifierModal: React.FC<MenuItemModifierModalProps> = ({
             </p>
           )}
 
-          {/* Kumpulan Modifier / Variasi */}
+          {/* Variasi Menu (Saiz / Pilihan Harga Berbeza) */}
+          {menuItem.variants && menuItem.variants.length > 0 && (
+            <div className="space-y-2 border-b border-stone-800/60 pb-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-stone-200 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Pilihan Variasi / Saiz</span>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-medium">
+                    Wajib Pilih 1
+                  </span>
+                </span>
+                <span className="text-[11px] text-stone-400">Harga mengikut variasi</span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {menuItem.variants.map((v) => {
+                  const isSelected = selectedVariant?.id === v.id;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      id={`variant-btn-${v.id}`}
+                      onClick={() => handleSelectVariant(v)}
+                      className={`p-2.5 rounded-xl border text-left flex flex-col justify-between gap-1 transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-emerald-600/20 border-emerald-500 text-white font-medium ring-1 ring-emerald-500/50'
+                          : 'bg-stone-950/60 border-stone-800 text-stone-300 hover:border-stone-700 hover:bg-stone-800/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white">{v.name}</span>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                      </div>
+                      <span className="text-xs font-mono font-semibold text-emerald-400">
+                        {formatCurrency(v.price)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Kumpulan Modifier */}
           {menuItem.modifierGroups && menuItem.modifierGroups.length > 0 ? (
             menuItem.modifierGroups.map((group) => {
               const selectedInGroup = selectedModifiers.filter(sm => sm.groupId === group.id);
@@ -194,8 +267,9 @@ export const MenuItemModifierModal: React.FC<MenuItemModifierModalProps> = ({
                         <button
                           key={opt.id}
                           type="button"
+                          id={`modifier-option-${opt.id}`}
                           onClick={() => handleToggleModifier(group, opt.id)}
-                          className={`flex items-center justify-between p-2 rounded-lg border text-xs text-left transition-all ${
+                          className={`flex items-center justify-between p-2 rounded-lg border text-xs text-left transition-all cursor-pointer ${
                             isSelected
                               ? 'bg-emerald-600/20 border-emerald-500 text-white font-medium ring-1 ring-emerald-500/50'
                               : 'bg-stone-950/60 border-stone-800 text-stone-300 hover:border-stone-700 hover:bg-stone-800/40'
@@ -226,9 +300,11 @@ export const MenuItemModifierModal: React.FC<MenuItemModifierModalProps> = ({
               );
             })
           ) : (
-            <p className="text-xs text-stone-400 italic">
-              Tiada pilihan modifier khusus untuk hidangan ini.
-            </p>
+            !menuItem.variants?.length && (
+              <p className="text-xs text-stone-400 italic">
+                Tiada pilihan modifier khusus untuk hidangan ini.
+              </p>
+            )
           )}
 
           {/* Arahan Khas Dapur */}
@@ -239,7 +315,7 @@ export const MenuItemModifierModal: React.FC<MenuItemModifierModalProps> = ({
             <input
               id="special-instructions-input"
               type="text"
-              placeholder="Cth: Kurang manis, tanpa taugeh, sambal asing, extra garing"
+              placeholder="Cth: Kurang manis, tanpa taugeh, kuah asing, pedas kaw"
               value={specialInstructions}
               onChange={(e) => setSpecialInstructions(e.target.value)}
               className="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-2 text-xs text-white placeholder-stone-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
@@ -253,7 +329,7 @@ export const MenuItemModifierModal: React.FC<MenuItemModifierModalProps> = ({
               <button
                 type="button"
                 onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
-                className="w-7 h-7 rounded bg-stone-800 text-stone-300 hover:text-white flex items-center justify-center transition-colors"
+                className="w-7 h-7 rounded bg-stone-800 text-stone-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
               >
                 <Minus className="w-3.5 h-3.5" />
               </button>
@@ -263,7 +339,7 @@ export const MenuItemModifierModal: React.FC<MenuItemModifierModalProps> = ({
               <button
                 type="button"
                 onClick={() => setQuantity(prev => prev + 1)}
-                className="w-7 h-7 rounded bg-stone-800 text-stone-300 hover:text-white flex items-center justify-center transition-colors"
+                className="w-7 h-7 rounded bg-stone-800 text-stone-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -284,7 +360,7 @@ export const MenuItemModifierModal: React.FC<MenuItemModifierModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 py-2 text-xs font-medium text-stone-400 hover:text-white bg-stone-800/60 hover:bg-stone-800 rounded-lg transition-colors"
+              className="px-3.5 py-2 text-xs font-medium text-stone-400 hover:text-white bg-stone-800/60 hover:bg-stone-800 rounded-lg transition-colors cursor-pointer"
             >
               Batal
             </button>
@@ -292,7 +368,7 @@ export const MenuItemModifierModal: React.FC<MenuItemModifierModalProps> = ({
               type="button"
               id="confirm-add-modifier-item-btn"
               onClick={handleConfirm}
-              className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-sm transition-all flex items-center gap-1.5"
+              className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Tambah ke Pesanan</span>

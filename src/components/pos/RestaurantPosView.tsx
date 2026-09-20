@@ -27,6 +27,7 @@ import {
   RestaurantOrderItem,
   RestaurantOrderType,
   SelectedModifierSnapshot,
+  SelectedVariantSnapshot,
   DiscountType,
 } from '../../types/restaurant';
 import { RestaurantOrderTypeSelector } from './RestaurantOrderTypeSelector';
@@ -62,6 +63,7 @@ export const RestaurantPosView: React.FC = () => {
     deleteTableDefinition,
     addTableReservation,
     refreshTablesData,
+    businessConfig,
   } = useStore();
 
   // Search & Category Tab
@@ -69,7 +71,9 @@ export const RestaurantPosView: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
 
   // Restaurant View Tab: 'MENU' | 'TABLES' (SES v4.5 Default Table Grid or Fast Menu)
-  const [activeRestaurantTab, setActiveRestaurantTab] = useState<'TABLES' | 'MENU'>('TABLES');
+  const [activeRestaurantTab, setActiveRestaurantTab] = useState<'TABLES' | 'MENU'>(() => {
+    return businessConfig?.tableMode === 'DISABLED' ? 'MENU' : 'TABLES';
+  });
 
   // Restaurant Order Header State
   const [orderType, setOrderType] = useState<RestaurantOrderType>('DINE_IN');
@@ -125,25 +129,29 @@ export const RestaurantPosView: React.FC = () => {
     setSelectedMenuItemForModal(item);
   };
 
-  // Add Item to Order with Selected Modifiers & Instructions
+  // Add Item to Order with Selected Modifiers & Instructions & Variant
   const handleConfirmAddItem = (
     item: MenuItem,
     quantity: number,
     selectedModifiers: SelectedModifierSnapshot[],
-    specialInstructions: string
+    specialInstructions: string,
+    selectedVariant?: SelectedVariantSnapshot
   ) => {
+    const basePrice = selectedVariant ? selectedVariant.price : item.price;
     const modifiersTotal = selectedModifiers.reduce((acc, mod) => acc + mod.price, 0);
-    const unitTotal = item.price + modifiersTotal;
+    const unitTotal = basePrice + modifiersTotal;
     const initialLineTotal = unitTotal * quantity;
+    const displayName = selectedVariant ? `${item.name} (${selectedVariant.name})` : item.name;
 
     // Setiap item baharu tidak mewarisi diskaun item terdahulu (SES v4.5)
     const newOrderItem: RestaurantOrderItem = {
       id: `order-line-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       menuItemId: item.id,
-      nameSnapshot: item.name,
+      nameSnapshot: displayName,
       categorySnapshot: item.category,
       kitchenStation: item.kitchenStation,
-      basePriceSnapshot: item.price,
+      basePriceSnapshot: basePrice,
+      selectedVariant,
       selectedModifiers,
       unitTotal,
       quantity,
@@ -359,7 +367,7 @@ export const RestaurantPosView: React.FC = () => {
 
     // Buka tab grid meja semula atau maklumkan pesanan disimpan
     setErrorMessage(null);
-    alert(`Pesanan Meja ${tableNumber} (${guestCount} Pax) berjaya disahkan & dihantar ke KDS Dapur! Meja kini OCCUPIED.`);
+    alert(`Pesanan Meja ${tableNumber} (${guestCount} Pax) berjaya disahkan & dihantar ke Dapur! Meja kini OCCUPIED.`);
     setOrderItems([]);
     setEditingOrderId(null);
     setCashReceivedInput('');
@@ -452,14 +460,11 @@ export const RestaurantPosView: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-white tracking-tight">
-                POS Restoran &amp; Kedai Makan
+                POS Restoran
               </h1>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700/60 uppercase">
-                Fasa 3 SES v4.5
-              </span>
             </div>
             <p className="text-xs text-stone-400 mt-0.5">
-              Table Management interaktif (6 status), Amaran Tempahan, Dine-in/Bungkus, &amp; Menu Restoran.
+              Table Management, Amaran Tempahan, Dine-in, Bungkus, &amp; Menu.
             </p>
           </div>
         </div>
@@ -505,7 +510,7 @@ export const RestaurantPosView: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-stone-950 transition shadow-sm cursor-pointer"
           >
             <ChefHat className="w-4 h-4" />
-            <span>KDS Dapur</span>
+            <span>Dapur</span>
           </button>
 
           <button
@@ -515,7 +520,7 @@ export const RestaurantPosView: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 transition"
           >
             <PlusCircle className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Tambah Meja</span>
+            <span>Meja</span>
           </button>
 
           <button
@@ -525,7 +530,7 @@ export const RestaurantPosView: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 transition"
           >
             <Settings className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Pengurusan Menu ({menuItems.length})</span>
+            <span>Menu ({menuItems.length})</span>
           </button>
         </div>
       </div>
@@ -696,6 +701,8 @@ export const RestaurantPosView: React.FC = () => {
             customerName={customerName}
             customerPhone={customerPhone}
             availableTables={tables}
+            enabledOrderTypes={businessConfig?.enabledOrderTypes}
+            tableMode={businessConfig?.tableMode}
             onOrderTypeChange={setOrderType}
             onTableNumberChange={setTableNumber}
             onGuestCountChange={setGuestCount}
@@ -1074,6 +1081,7 @@ export const RestaurantPosView: React.FC = () => {
       {/* Modal Tambah Meja Baharu */}
       <TableDefinitionModal
         isOpen={isAddTableModalOpen}
+        tables={tables}
         existingZones={Array.from(new Set(tables.map((t) => t.zone)))}
         onClose={() => setIsAddTableModalOpen(false)}
         onSaveTable={(tableData) => {

@@ -51,3 +51,25 @@ export const formatDateTime = (isoString: string): string => {
   }
 };
 
+/**
+ * Mengembalikan tarikh kalendar tempatan pengguna (format YYYY-MM-DD)
+ * Mengelakkan pepijat UTC di mana tarikh terundur ke hari sebelumnya
+ * (contoh: di Malaysia GMT+8 apabila dipanggil sebelum jam 8:00 pagi).
+ */
+export const getLocalDateString = (date: Date = new Date()): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/**
+ * Mengembalikan masa tempatan pengguna (format HH:mm)
+ */
+export const getLocalTimeString = (date: Date = new Date()): string => {
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
+

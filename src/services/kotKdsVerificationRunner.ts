@@ -138,7 +138,7 @@ export class KotKdsVerificationRunner {
         name: 'KITCHEN Role Privilege Isolation (No Sales / Financial Access)',
         passed: isIsolated,
         expected: 'KITCHEN role tidak dibenarkan mengakses rekod jualan, kewangan, belian, pembekal atau tetapan',
-        actual: `Akses dibenarkan hanya untuk KDS Dapur. Capaian ke ${blockedViewsForKitchen.join(', ')} disekat sepenuhnya.`,
+        actual: `Akses dibenarkan hanya untuk Dapur. Capaian ke ${blockedViewsForKitchen.join(', ')} disekat sepenuhnya.`,
         evidence: `server.ts dan App.tsx menyekat sesi KITCHEN daripada melihat atau memanggil endpoint pengurusan.`,
       });
     } catch (e: any) {

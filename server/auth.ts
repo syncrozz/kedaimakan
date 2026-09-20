@@ -11,6 +11,7 @@
  */
 
 import crypto from 'crypto';
+import 'dotenv/config';
 import type {
   WorkspaceAuthConfig,
   WorkspaceAuthPublicState,
@@ -21,11 +22,41 @@ import type {
   InvalidationReason,
 } from '../src/types/auth';
 
-// Server-only Master Admin Secret PIN (Defaults to 5313)
-const MASTER_ADMIN_PIN = process.env.MASTER_ADMIN_PIN || '5313';
+/**
+ * Returns the Master Admin PIN.
+ * IN PRODUCTION: `process.env.MASTER_ADMIN_PIN` is strictly MANDATORY.
+ * IN DEVELOPMENT/TEST: Defaults to '5313' if not set.
+ */
+export function getMasterAdminPin(): string {
+  const envPin = process.env.MASTER_ADMIN_PIN?.trim();
+  if (envPin && envPin.length > 0) {
+    return envPin;
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[CRITICAL_SECURITY_FATAL] MASTER_ADMIN_PIN environment variable is MANDATORY in production mode! Fallback PIN is strictly prohibited in production.'
+    );
+  }
+  return '5313';
+}
 
-// HMAC signing secret for session tokens
-const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+/**
+ * Returns the HMAC session signing secret.
+ * IN PRODUCTION: `process.env.SESSION_SECRET` is strictly MANDATORY. No fallback secret is permitted.
+ * IN DEVELOPMENT/TEST: A deterministic dev secret is permitted.
+ */
+export function getSessionSecret(): string {
+  const envSecret = process.env.SESSION_SECRET?.trim();
+  if (envSecret && envSecret.length > 0) {
+    return envSecret;
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[CRITICAL_SECURITY_FATAL] SESSION_SECRET environment variable is MANDATORY in production mode! Fallback secret is strictly prohibited in production.'
+    );
+  }
+  return 'niagapos_ses_v45_dev_hmac_signing_secret_never_use_in_prod';
+}
 
 // Rate limiting & lockout configuration
 const MAX_FAILED_ATTEMPTS = 5;
@@ -133,12 +164,12 @@ export function clearLockout(identifier: string): void {
 }
 
 /**
- * Signs a session payload into a tamper-proof bearer token.
+ * Signs a session payload into an HMAC-SHA256 authenticated bearer token.
  */
 export function generateToken(payload: Record<string, any>): string {
   const data = JSON.stringify(payload);
   const dataBase64 = Buffer.from(data).toString('base64url');
-  const signature = crypto.createHmac('sha256', SESSION_SECRET).update(dataBase64).digest('base64url');
+  const signature = crypto.createHmac('sha256', getSessionSecret()).update(dataBase64).digest('base64url');
   return `${dataBase64}.${signature}`;
 }
 
@@ -151,7 +182,7 @@ export function verifyToken<T = Record<string, any>>(token: string): T | null {
   if (parts.length !== 2) return null;
 
   const [dataBase64, signature] = parts;
-  const expectedSig = crypto.createHmac('sha256', SESSION_SECRET).update(dataBase64).digest('base64url');
+  const expectedSig = crypto.createHmac('sha256', getSessionSecret()).update(dataBase64).digest('base64url');
   if (signature !== expectedSig) return null;
 
   try {
@@ -215,7 +246,7 @@ export function verifyTokenWithDiagnostic<T = Record<string, any>>(
     };
   }
 
-  const expectedSig = crypto.createHmac('sha256', SESSION_SECRET).update(dataBase64).digest('base64url');
+  const expectedSig = crypto.createHmac('sha256', getSessionSecret()).update(dataBase64).digest('base64url');
   if (signature !== expectedSig) {
     return {
       valid: false,
@@ -373,8 +404,8 @@ export function authenticateClient(
     authConfig = initWorkspaceAuth(`ws_${cleanSlug}`, cleanSlug, '1234');
   }
 
-  // 4. Verify PIN hash (workspace PIN or Master Admin 5313 override)
-  const isMasterOverride = cleanPin === '5313';
+  // 4. Verify PIN hash (workspace PIN or Master Admin override)
+  const isMasterOverride = cleanPin === getMasterAdminPin();
   const isValid = isMasterOverride || verifyPinHash(cleanPin, authConfig.pinHash);
 
   if (!isValid) {
@@ -437,8 +468,8 @@ export function changeClientPin(
     authConfig = initWorkspaceAuth(`ws_${cleanSlug}`, cleanSlug, '1234');
   }
 
-  // Verify current PIN (or Master Admin 5313 override)
-  const isMaster = currentPin.trim() === '5313';
+  // Verify current PIN (or Master Admin override)
+  const isMaster = currentPin.trim() === getMasterAdminPin();
   if (!isMaster && !verifyPinHash(currentPin.trim(), authConfig.pinHash)) {
     return { success: false, error: 'PIN semasa tidak tepat.' };
   }
@@ -497,7 +528,7 @@ export function authenticateMasterAdmin(
   }
 
   const cleanPin = (pin || '').trim();
-  if (cleanPin !== MASTER_ADMIN_PIN) {
+  if (cleanPin !== getMasterAdminPin()) {
     const failState = recordFailedAttempt('master_admin');
     if (failState.locked) {
       return {
@@ -585,7 +616,6 @@ export function adminResetClientPin(
 // ----------------------------------------------------
 
 const DEFAULT_KITCHEN_PIN = '9999';
-const FALLBACK_KITCHEN_PIN = '8888';
 
 /**
  * Returns public kitchen auth state (isDefaultPin, hasCustomPin) without exposing hashes.
@@ -600,8 +630,7 @@ export function getKitchenPublicAuthState(workspaceSlug: string): {
   const hasCustomPin = Boolean(authConfig?.kitchenPinHash);
   const isDefaultPin =
     !hasCustomPin ||
-    authConfig?.kitchenPinHash === hashPin(DEFAULT_KITCHEN_PIN) ||
-    authConfig?.kitchenPinHash === hashPin(FALLBACK_KITCHEN_PIN);
+    authConfig?.kitchenPinHash === hashPin(DEFAULT_KITCHEN_PIN);
 
   return {
     workspaceSlug: cleanSlug,
@@ -651,13 +680,11 @@ export function authenticateKitchen(
   // If kitchenPinHash is not explicitly set, use default kitchen PIN (9999)
   const targetKitchenHash = authConfig.kitchenPinHash || hashPin(DEFAULT_KITCHEN_PIN);
 
-  // 4. Verify PIN (Supports Master Admin 5313 override, Kitchen PIN 9999/8888, or Owner PIN)
-  const isMasterOverride = cleanPin === '5313';
-  const isFallbackDefault = !hasCustomPin && cleanPin === FALLBACK_KITCHEN_PIN;
+  // 4. Verify PIN (Supports Master Admin override, Kitchen PIN, or Owner PIN)
+  const isMasterOverride = cleanPin === getMasterAdminPin();
   const isValid =
     isMasterOverride ||
     verifyPinHash(cleanPin, targetKitchenHash) ||
-    isFallbackDefault ||
     verifyPinHash(cleanPin, authConfig.pinHash);
 
   if (!isValid) {
@@ -680,8 +707,7 @@ export function authenticateKitchen(
 
   const isDefaultPin =
     !hasCustomPin ||
-    targetKitchenHash === hashPin(DEFAULT_KITCHEN_PIN) ||
-    targetKitchenHash === hashPin(FALLBACK_KITCHEN_PIN);
+    targetKitchenHash === hashPin(DEFAULT_KITCHEN_PIN);
 
   // Kitchen session active until manual logout (7 days token expiry)
   const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
@@ -747,13 +773,12 @@ export function changeKitchenPin(
     authConfig = initWorkspaceAuth(`ws_${cleanSlug}`, cleanSlug, '1234');
   }
 
-  // Verify current PIN (owner PIN, master override 5313, or current kitchen PIN)
+  // Verify current PIN (owner PIN, master override, or current kitchen PIN)
   const currentKitchenHash = authConfig.kitchenPinHash || hashPin(DEFAULT_KITCHEN_PIN);
-  const isMasterOverride = cPin === '5313';
+  const isMasterOverride = cPin === getMasterAdminPin();
   const isValidCurrent =
     isMasterOverride ||
     verifyPinHash(cPin, currentKitchenHash) ||
-    (!authConfig.kitchenPinHash && cPin === FALLBACK_KITCHEN_PIN) ||
     verifyPinHash(cPin, authConfig.pinHash);
 
   if (!isValidCurrent) {

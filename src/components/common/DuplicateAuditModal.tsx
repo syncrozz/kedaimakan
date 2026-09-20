@@ -117,7 +117,7 @@ export const DuplicateAuditModal: React.FC<DuplicateAuditModalProps> = ({
                         >
                           <div>
                             <span className="font-semibold text-stone-800">
-                              {item.name || item.supplierName || item.customerName || item.sku || 'Rekod'}
+                              {item.name || item.tableNumber ? (item.tableNumber ? `Meja ${item.tableNumber}` : item.name) : (item.supplierName || item.customerName || item.sku || item.code || 'Rekod')}
                             </span>
                             <span className="text-stone-400 ml-2 text-[11px]">
                               ID: {item.id}
