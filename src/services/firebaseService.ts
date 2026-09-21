@@ -111,6 +111,7 @@ export class FirebaseService {
   private static lastSyncedAt: Date | null = null;
   private static statusListeners: ((status: CloudSyncStatus, lastSynced: Date | null) => void)[] = [];
   private static activeSubscriptions: Unsubscribe[] = [];
+  private static workspaceSubscriptions: Map<string, Unsubscribe[]> = new Map();
 
   public static isConfigured(): boolean {
     return isFirebaseConfigured();
@@ -1308,11 +1309,14 @@ export class FirebaseService {
         localSubs.push(unsubTax);
         this.activeSubscriptions.push(unsubTax);
       }
+
+      this.workspaceSubscriptions.set(slug, localSubs);
     } catch (err) {
       console.warn('Error starting restaurant real-time listeners:', err);
     }
 
     return () => {
+      this.workspaceSubscriptions.delete(slug);
       localSubs.forEach((unsub) => {
         try {
           unsub();
@@ -1321,5 +1325,33 @@ export class FirebaseService {
         }
       });
     };
+  }
+
+  /**
+   * Detach only listeners belonging to a specific workspace (SES v4.5 Scope Protection)
+   * Prevents disrupting Master Admin or other active tenant sessions during resets.
+   */
+  public static detachWorkspaceListeners(workspaceSlug: string = 'default'): void {
+    const slug = this.cleanSlug(workspaceSlug);
+    const subs = this.workspaceSubscriptions.get(slug);
+    if (subs && subs.length > 0) {
+      subs.forEach((unsub) => {
+        try {
+          unsub();
+        } catch (err) {
+          console.warn('Error in detachWorkspaceListeners:', err);
+        }
+      });
+      this.workspaceSubscriptions.delete(slug);
+    }
+  }
+
+  /**
+   * Check if a specific workspace has active real-time listeners
+   */
+  public static isWorkspaceSubscribed(workspaceSlug: string = 'default'): boolean {
+    const slug = this.cleanSlug(workspaceSlug);
+    const subs = this.workspaceSubscriptions.get(slug);
+    return Boolean(subs && subs.length > 0);
   }
 }

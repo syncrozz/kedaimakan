@@ -30,6 +30,17 @@ export interface WorkspaceAuthConfigData {
   updatedAt: string;
 }
 
+export type WorkspaceType = 'CLIENT' | 'DEMO';
+
+export interface WorkspaceDemoMetadata {
+  demoSeedVersion: string;
+  demoAccessEnabled: boolean;
+  demoResetVersion: number;
+  demoLastResetAt?: string;
+  demoLastResetBy?: string;
+  demoAnalyticsEnabled: boolean;
+}
+
 export interface Workspace {
   workspaceId: string;
   workspaceSlug: string;
@@ -53,6 +64,8 @@ export interface Workspace {
     totalRevenue: number;
     lastSaleAt?: string;
   };
+  workspaceType?: WorkspaceType;
+  demoMetadata?: WorkspaceDemoMetadata;
 }
 
 export interface WorkspaceSlugRecord {

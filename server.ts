@@ -16,6 +16,8 @@ import {
   verifyToken,
   verifyTokenWithDiagnostic,
   checkLockout,
+  resolveWorkspaceAuthoritatively,
+  recordAuditLog,
 } from './server/auth.ts';
 
 const PORT = 3000;
@@ -196,7 +198,8 @@ async function startServer() {
       return;
     }
 
-    const result = authenticateClient(workspaceSlug, pin, workspaceName);
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '127.0.0.1';
+    const result = authenticateClient(workspaceSlug, pin, workspaceName, clientIp);
     if (!result.success) {
       res.status(result.remainingSeconds ? 429 : 401).json(result);
       return;
@@ -507,6 +510,113 @@ async function startServer() {
 
     const logs = getAuditLogs();
     res.json({ success: true, logs });
+  });
+
+  // ----------------------------------------------------
+  // DEMO SANDBOX MANAGEMENT & HEARTBEAT (SES v4.5)
+  // ----------------------------------------------------
+  let demoResetVersion = 1;
+  let demoLastResetAt = new Date().toISOString();
+  let demoLastResetBy = 'SYSTEM_INIT';
+
+  // Demo Sandbox Status
+  app.get('/api/demo/status', (req: Request, res: Response) => {
+    res.json({
+      success: true,
+      workspaceId: 'ws_demo_sandbox_001',
+      workspaceSlug: 'demo',
+      workspaceType: 'DEMO',
+      seedVersion: '1.0.0',
+      demoResetVersion,
+      demoLastResetAt,
+      demoLastResetBy,
+      isPublicDemo: true,
+      publicPin: '1234',
+    });
+  });
+
+  // Master Admin Authoritative Global Reset
+  // Rule: Prospective clients cannot trigger global sandbox resets to protect concurrent users.
+  // Concurrency guard: Concurrent reset attempts are safely rejected with HTTP 409 Conflict.
+  let isResetExecuting = false;
+
+  app.post('/api/demo/reset', async (req: Request, res: Response) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : req.body?.token;
+
+    if (!token) {
+      res.status(401).json({
+        success: false,
+        error: 'Sesi Master Admin diperlukan untuk melaksanakan tetapan semula global.',
+      });
+      return;
+    }
+
+    const decoded = verifyToken<{ role: string; workspaceSlug?: string }>(token);
+    if (!decoded || decoded.role !== 'MASTER_ADMIN') {
+      res.status(403).json({
+        success: false,
+        error: 'Akses ditolak: Tetapan semula sandbox global hanya boleh dilaksanakan oleh Master Admin.',
+      });
+      return;
+    }
+
+    if (isResetExecuting) {
+      res.status(409).json({
+        success: false,
+        error: 'Operasi tetapan semula sandbox sedang diproses serentak. Sila tunggu seketika.',
+      });
+      return;
+    }
+
+    isResetExecuting = true;
+    try {
+      const resetOperationId = `op_reset_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      demoResetVersion += 1;
+      demoLastResetAt = new Date().toISOString();
+      demoLastResetBy = 'MASTER_ADMIN';
+
+      recordAuditLog({
+        action: 'RESET_CLIENT_PIN', // Auditable action
+        workspaceId: 'ws_demo_sandbox_001',
+        workspaceSlug: 'demo',
+        performedBy: 'MASTER_ADMIN',
+        details: {
+          type: 'DEMO_SANDBOX_RESET_COMPLETED',
+          resetOperationId,
+          resetVersion: demoResetVersion,
+          seedVersion: '1.0.0',
+          timestamp: demoLastResetAt,
+        },
+      });
+
+      res.json({
+        success: true,
+        verified: true,
+        message: 'Tetapan semula sandbox berjaya disahkan oleh Master Admin.',
+        resetOperationId,
+        resetVersion: demoResetVersion,
+        seedVersion: '1.0.0',
+        timestamp: demoLastResetAt,
+      });
+    } finally {
+      isResetExecuting = false;
+    }
+  });
+
+  // Heartbeat endpoint for active session tracking
+  app.post('/api/demo/heartbeat', (req: Request, res: Response) => {
+    const { sessionId, lastSeenAt, activeSeconds } = req.body || {};
+    if (!sessionId) {
+      res.status(400).json({ success: false, error: 'sessionId diperlukan.' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      acknowledgedAt: new Date().toISOString(),
+      sessionId,
+    });
   });
 
   // ----------------------------------------------------

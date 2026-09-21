@@ -45,6 +45,7 @@ import { ChangePinModal } from './components/auth/ChangePinModal';
 import { ClientAuthService } from './services/clientAuthService';
 import { DeploymentVersionService } from './services/deploymentVersionService';
 import type { ClientAuthSession } from './types/auth';
+import { DemoSandboxBanner } from './components/demo/DemoSandboxBanner';
 
 function WorkspaceTrialBanner({ workspace }: { workspace: Workspace }) {
   const trialStatus = WorkspaceService.calculateTrialStatus(workspace);
@@ -361,11 +362,16 @@ function MainAppContent() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Workspace Trial Notification Bar */}
-      {currentWorkspace && <WorkspaceTrialBanner workspace={currentWorkspace} />}
+      {/* Demo Sandbox Management Banner (SES v4.5) */}
+      <DemoSandboxBanner workspaceSlug={currentWorkspace?.workspaceSlug} />
 
-      {/* Default PIN Security Warning Banner */}
-      {currentWorkspace && (clientSession?.isDefaultPin || clientSession?.mustChangeDefaultPin) && !isAdminMode && (
+      {/* Workspace Trial Notification Bar */}
+      {currentWorkspace && currentWorkspace.workspaceType !== 'DEMO' && (
+        <WorkspaceTrialBanner workspace={currentWorkspace} />
+      )}
+
+      {/* Default PIN Security Warning Banner (Suppressed for public Demo Sandbox) */}
+      {currentWorkspace && (clientSession?.isDefaultPin || clientSession?.mustChangeDefaultPin) && !isAdminMode && currentWorkspace.workspaceType !== 'DEMO' && (
         <div className="bg-amber-500 text-stone-950 px-4 py-2 text-xs font-semibold flex items-center justify-between shadow-xs z-20">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 text-stone-950" />

@@ -29,6 +29,36 @@ const WORKSPACE_MEMBERS_LOCAL_KEY = 'niagapos_workspace_members_v1';
 const DEFAULT_GRACE_PERIOD_DAYS = 7;
 export const PRODUCTION_DOMAIN = 'https://niagapos.syncrozz.com';
 
+export const DEFAULT_DEMO_WORKSPACE: Workspace = {
+  workspaceId: 'ws_demo_sandbox_001',
+  workspaceSlug: 'demo',
+  workspaceName: 'Kedai Makan Demo (Sandbox)',
+  ownerEmail: 'demo@niagapos.syncrozz.com',
+  ownerName: 'Pelanggan Demo NiagaPOS',
+  status: 'ACTIVE',
+  trialDurationDays: 365,
+  trialStartedAt: '2026-01-01T00:00:00.000Z',
+  trialExpiresAt: '2027-01-01T00:00:00.000Z',
+  gracePeriodDays: 30,
+  gracePeriodEndsAt: '2027-01-31T00:00:00.000Z',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+  workspaceType: 'DEMO',
+  demoMetadata: {
+    demoSeedVersion: '1.0.0',
+    demoAccessEnabled: true,
+    demoResetVersion: 1,
+    demoAnalyticsEnabled: true,
+  },
+  authConfig: {
+    pinHash: 'd404559f602eab6fd602ac7680dacbfaadd13630335e951f097af3900e9de176b6db28512f2e000b9d04fba5133e8b1c6e8df59db3a8ab9d60be4b97cc9e81db',
+    salt: 'demo_salt_constant_001',
+    pinVersion: 1,
+    mustChangeDefaultPin: false,
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+};
+
 // In-memory fallback for non-browser runtimes (unit tests / node)
 const memoryStorage = new Map<string, string>();
 
@@ -100,11 +130,15 @@ export class WorkspaceService {
   private static getAllWorkspacesLocal(): Workspace[] {
     try {
       const raw = safeGetItem(WORKSPACES_LOCAL_KEY);
-      if (!raw) return [];
-      const list = JSON.parse(raw);
-      return Array.isArray(list) ? list : [];
+      let list: Workspace[] = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(list)) list = [];
+      // Guarantee DEMO sandbox workspace presence
+      if (!list.some((w) => w.workspaceSlug.toLowerCase() === 'demo' || w.workspaceId === 'ws_demo_sandbox_001')) {
+        list.push(DEFAULT_DEMO_WORKSPACE);
+      }
+      return list;
     } catch {
-      return [];
+      return [DEFAULT_DEMO_WORKSPACE];
     }
   }
 

@@ -357,6 +357,73 @@ export function getWorkspaceAuth(identifier: string): WorkspaceAuthConfig | unde
   return authConfigStore.get(identifier.toLowerCase());
 }
 
+/**
+ * SES v4.5 Authoritative Workspace Resolver
+ * Maps slug or workspaceId to confirmed entity record.
+ */
+export function resolveWorkspaceAuthoritatively(identifier: string): {
+  workspaceId: string;
+  workspaceSlug: string;
+  workspaceType: 'CLIENT' | 'DEMO';
+} | null {
+  const clean = (identifier || '').trim().toLowerCase();
+  if (!clean) return null;
+
+  if (clean === 'demo' || clean === 'ws_demo_sandbox_001') {
+    return {
+      workspaceId: 'ws_demo_sandbox_001',
+      workspaceSlug: 'demo',
+      workspaceType: 'DEMO',
+    };
+  }
+
+  const auth = getWorkspaceAuth(clean);
+  if (auth) {
+    return {
+      workspaceId: auth.workspaceId,
+      workspaceSlug: auth.workspaceSlug,
+      workspaceType: 'CLIENT',
+    };
+  }
+
+  return {
+    workspaceId: clean.startsWith('ws_') ? clean : `ws_${clean}`,
+    workspaceSlug: clean.replace(/^ws_/, ''),
+    workspaceType: 'CLIENT',
+  };
+}
+
+interface IpRateLimitEntry {
+  count: number;
+  windowStart: number;
+}
+const demoIpRateLimits = new Map<string, IpRateLimitEntry>();
+
+/**
+ * Sliding window IP rate limiter for public demo authentication (SES v4.5 Protection)
+ * Max 10 attempts per minute per IP address.
+ */
+export function checkDemoIpRateLimit(ip: string): { allowed: boolean; remainingSeconds?: number } {
+  const cleanIp = (ip || '127.0.0.1').trim();
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  const maxRequests = 10;
+
+  const entry = demoIpRateLimits.get(cleanIp);
+  if (!entry || now - entry.windowStart > windowMs) {
+    demoIpRateLimits.set(cleanIp, { count: 1, windowStart: now });
+    return { allowed: true };
+  }
+
+  if (entry.count >= maxRequests) {
+    const remainingSeconds = Math.ceil((entry.windowStart + windowMs - now) / 1000);
+    return { allowed: false, remainingSeconds };
+  }
+
+  entry.count++;
+  return { allowed: true };
+}
+
 export function getPublicAuthState(identifier: string): WorkspaceAuthPublicState | null {
   const cfg = getWorkspaceAuth(identifier);
   if (!cfg) return null;
@@ -375,10 +442,27 @@ export function getPublicAuthState(identifier: string): WorkspaceAuthPublicState
 export function authenticateClient(
   workspaceSlug: string,
   pin: string,
-  workspaceName?: string
-): { success: boolean; session?: ClientAuthSession; error?: string; remainingSeconds?: number } {
+  workspaceName?: string,
+  clientIp?: string
+): { success: boolean; session?: ClientAuthSession & { isDemo?: boolean; workspaceType?: string; memberRole?: string }; error?: string; remainingSeconds?: number } {
   const cleanSlug = (workspaceSlug || '').trim().toLowerCase();
   const cleanPin = (pin || '').trim();
+
+  // Resolve authoritative workspace
+  const resolved = resolveWorkspaceAuthoritatively(cleanSlug);
+  const isDemo = resolved?.workspaceType === 'DEMO';
+
+  // Apply per-IP rate limiting on public demo endpoint
+  if (isDemo && clientIp) {
+    const ipCheck = checkDemoIpRateLimit(clientIp);
+    if (!ipCheck.allowed) {
+      return {
+        success: false,
+        error: `Terlalu banyak percubaan log masuk Demo dari alamat IP ini. Sila tunggu ${ipCheck.remainingSeconds} saat.`,
+        remainingSeconds: ipCheck.remainingSeconds,
+      };
+    }
+  }
 
   // 1. Check lockout
   const lockout = checkLockout(cleanSlug);
@@ -401,7 +485,7 @@ export function authenticateClient(
   // 3. Retrieve or auto-init workspace auth config
   let authConfig = getWorkspaceAuth(cleanSlug);
   if (!authConfig) {
-    authConfig = initWorkspaceAuth(`ws_${cleanSlug}`, cleanSlug, '1234');
+    authConfig = initWorkspaceAuth(resolved?.workspaceId || `ws_${cleanSlug}`, resolved?.workspaceSlug || cleanSlug, '1234');
   }
 
   // 4. Verify PIN hash (workspace PIN or Master Admin override)
@@ -426,26 +510,33 @@ export function authenticateClient(
   // 5. Success: clear lockout
   clearLockout(cleanSlug);
 
-  // 6. Generate Session Token (24 hours expiry)
-  const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
+  // 6. Generate Session Token (Demo token expires in 4 hours, regular client 24 hours)
+  const tokenDuration = isDemo ? 4 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+  const expiresAt = Date.now() + tokenDuration;
   const token = generateToken({
     workspaceId: authConfig.workspaceId,
     workspaceSlug: authConfig.workspaceSlug,
     role: 'CLIENT',
+    workspaceType: isDemo ? 'DEMO' : 'CLIENT',
+    memberRole: isDemo ? 'STAFF' : 'OWNER',
+    isDemo,
     pinVersion: authConfig.pinVersion,
     isMasterOverride,
     exp: expiresAt,
   });
 
-  const session: ClientAuthSession = {
+  const session: ClientAuthSession & { isDemo?: boolean; workspaceType?: string; memberRole?: string } = {
     token,
     workspaceId: authConfig.workspaceId,
     workspaceSlug: authConfig.workspaceSlug,
-    workspaceName: workspaceName || authConfig.workspaceSlug,
+    workspaceName: workspaceName || (isDemo ? 'Kedai Makan Demo (Sandbox)' : authConfig.workspaceSlug),
     role: 'CLIENT',
     isPinEnabled: authConfig.isPinEnabled,
-    mustChangeDefaultPin: isMasterOverride ? false : authConfig.mustChangeDefaultPin,
+    mustChangeDefaultPin: isMasterOverride || isDemo ? false : authConfig.mustChangeDefaultPin,
     pinVersion: authConfig.pinVersion,
+    isDemo,
+    workspaceType: isDemo ? 'DEMO' : 'CLIENT',
+    memberRole: isDemo ? 'STAFF' : 'OWNER',
     expiresAt,
   };
 
@@ -807,6 +898,7 @@ export function changeKitchenPin(
 }
 
 // Bootstrap initial default demo workspaces:
+initWorkspaceAuth('ws_demo_sandbox_001', 'demo', '1234');
 initWorkspaceAuth('ws_kedai-pak-abu', 'kedai-pak-abu', '1234');
 initWorkspaceAuth('ws_kedai-mak-limah', 'kedai-mak-limah', '1234');
 

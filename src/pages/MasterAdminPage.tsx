@@ -30,12 +30,15 @@ import {
   AlertTriangle,
   KeyRound,
   FileText,
+  PlayCircle,
 } from 'lucide-react';
 import { WorkspaceService, PRODUCTION_DOMAIN } from '../services/workspaceService';
 import { ClientAuthService } from '../services/clientAuthService';
 import { CreateWorkspaceModal } from '../components/workspace/CreateWorkspaceModal';
 import { ResetPinConfirmModal } from '../components/admin/ResetPinConfirmModal';
 import { AuditLogsModal } from '../components/admin/AuditLogsModal';
+import { DemoResetConfirmModal } from '../components/demo/DemoResetConfirmModal';
+import { DemoVerificationModal } from '../components/admin/DemoVerificationModal';
 import { useStore } from '../context/StoreContext';
 import type { Workspace, ClientAccessDetails } from '../types/workspace';
 import type { AuditLogRecord } from '../types/auth';
@@ -67,6 +70,8 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
   // Reset PIN and Audit Log modals
   const [resetPinWorkspace, setResetPinWorkspace] = useState<Workspace | null>(null);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+  const [isDemoResetModalOpen, setIsDemoResetModalOpen] = useState(false);
+  const [isDemoVerificationModalOpen, setIsDemoVerificationModalOpen] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
   const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
 
@@ -434,6 +439,56 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
           </div>
         </div>
 
+        {/* Demo Sandbox Control & Health Card (SES v4.5) */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-950/40 via-stone-900 to-stone-900 border border-amber-800/40 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl shrink-0 mt-0.5">
+              <PlayCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-white">Kawalan Sandbox Demo (SES v4.5)</h3>
+                <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-amber-950/80 text-amber-300 border border-amber-800/60">
+                  Benih Rasmi v1.0.0
+                </span>
+              </div>
+              <p className="text-xs text-stone-400 mt-1 max-w-2xl leading-relaxed">
+                Ruang ujian awam kongsi (<code className="text-amber-300">/demo</code> &bull; PIN: <code className="text-amber-300">1234</code>). Mengandungi 12 menu, 10 meja, 2 pesanan contoh, konfigurasi SST 6% & telemetri privasi. Hanya Master Admin berkuasa melaksanakan tetapan semula global ke pangkalan data awan.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0 self-stretch md:self-auto justify-end">
+            <button
+              id="btn-admin-visit-demo"
+              type="button"
+              onClick={() => onSelectWorkspace ? onSelectWorkspace('demo') : window.open('/demo', '_self')}
+              className="px-3.5 py-2 text-xs font-semibold text-stone-200 bg-stone-800 hover:bg-stone-700 rounded-xl border border-stone-700 transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Buka Demo</span>
+            </button>
+            <button
+              id="btn-admin-open-verification"
+              type="button"
+              onClick={() => setIsDemoVerificationModalOpen(true)}
+              className="px-3.5 py-2 text-xs font-semibold text-emerald-200 bg-emerald-950/80 hover:bg-emerald-900 rounded-xl border border-emerald-800/80 transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Uji 15 Gate (SES v4.5)</span>
+            </button>
+            <button
+              id="btn-admin-open-demo-reset"
+              type="button"
+              onClick={() => setIsDemoResetModalOpen(true)}
+              className="px-3.5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Tetapan Semula Global</span>
+            </button>
+          </div>
+        </div>
+
         {/* Workspaces Table Section */}
         <div className="bg-stone-900 border border-stone-800 rounded-2xl overflow-hidden shadow-xl">
           {/* Table Toolbar */}
@@ -671,6 +726,27 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
         logs={auditLogs}
         onRefresh={loadAuditLogs}
         loading={loadingAuditLogs}
+      />
+
+      {/* Authoritative Demo Sandbox Global Reset Modal (SES v4.5) */}
+      <DemoResetConfirmModal
+        isOpen={isDemoResetModalOpen}
+        onClose={() => setIsDemoResetModalOpen(false)}
+        masterAdminToken={ClientAuthService.getMasterAdminSession()?.token || 'master_admin_token'}
+        onResetComplete={() => {
+          setStatusMessage({
+            text: 'Sandbox Demo (ws_demo_sandbox_001) berjaya disetkan semula dan disahkan dengan dataset benih rasmi v1.0.0.',
+            type: 'success',
+          });
+          loadWorkspaces();
+          loadAuditLogs();
+        }}
+      />
+
+      {/* Demo Sandbox 15 Safety Verification Gates Modal (SES v4.5) */}
+      <DemoVerificationModal
+        isOpen={isDemoVerificationModalOpen}
+        onClose={() => setIsDemoVerificationModalOpen(false)}
       />
     </div>
   );
