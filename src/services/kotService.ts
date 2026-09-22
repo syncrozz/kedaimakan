@@ -145,7 +145,7 @@ export class KotService {
       operator?: string;
     },
     workspaceSlug: string
-  ): Promise<{ ticket: KitchenOrderTicket; isNew: boolean }> {
+  ): Promise<{ ticket: KitchenOrderTicket | null; isNew: boolean }> {
     const cleanSlug = (workspaceSlug || 'default').trim().toLowerCase();
     const existingTickets = this.getCachedTickets(cleanSlug);
 
@@ -155,14 +155,20 @@ export class KotService {
       return { ticket: existing, isNew: false };
     }
 
+    // Directive 7: Filter out retail items - retail products must not enter KOT/KDS by default (SES v4.5)
+    const kitchenEligibleItems = orderData.items.filter((it) => it.itemType !== 'RETAIL');
+    if (kitchenEligibleItems.length === 0) {
+      return { ticket: null, isNew: false };
+    }
+
     // Convert RestaurantOrderItem to KitchenOrderItemSnapshot
-    const snapshotItems: KitchenOrderItemSnapshot[] = orderData.items.map((it) => {
+    const snapshotItems: KitchenOrderItemSnapshot[] = kitchenEligibleItems.map((it) => {
       const modifiers = (it.selectedModifiers || []).map(
         (m) => `${m.groupName ? m.groupName + ': ' : ''}${m.optionName}`
       );
       return {
         itemId: it.id,
-        productId: it.menuItemId,
+        productId: it.menuItemId || it.id,
         name: it.nameSnapshot,
         quantity: it.quantity,
         previousQuantity: it.quantity,
@@ -277,9 +283,13 @@ export class KotService {
       existingMap.set(item.productId + '_' + (item.notes || ''), item);
     }
 
-    // Process new items
-    for (const newItem of newItems) {
-      const key = newItem.menuItemId + '_' + (newItem.specialInstructions || '');
+    // Directive 7: Filter out retail items - retail products must not enter KOT/KDS by default (SES v4.5)
+    const kitchenEligibleNewItems = newItems.filter((it) => it.itemType !== 'RETAIL');
+
+    // Process new kitchen-eligible items
+    for (const newItem of kitchenEligibleNewItems) {
+      const prodId = newItem.menuItemId || newItem.id;
+      const key = prodId + '_' + (newItem.specialInstructions || '');
       const existing = existingMap.get(key);
 
       const modifiers = (newItem.selectedModifiers || []).map(
@@ -290,7 +300,7 @@ export class KotService {
         // Item added
         updatedItemsList.push({
           itemId: newItem.id,
-          productId: newItem.menuItemId,
+          productId: prodId,
           name: newItem.nameSnapshot,
           quantity: newItem.quantity,
           previousQuantity: 0,

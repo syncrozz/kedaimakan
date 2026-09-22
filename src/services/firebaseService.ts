@@ -907,9 +907,25 @@ export class FirebaseService {
   // RESTAURANT DOMAIN REAL-TIME MULTI-DEVICE SYNC (SES v4.5)
   // =========================================================================
 
-  private static cleanSlug(slug?: string): string {
+  /**
+   * Cleans workspace identifier and standardizes demo slug to authoritative workspace ID (SES v4.5)
+   */
+  public static cleanSlug(slug?: string): string {
     if (!slug || !slug.trim()) return 'default';
-    return slug.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    const cleaned = slug.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    // SES v4.5 Authoritative Workspace Resolution:
+    // Maps 'demo' or 'ws_demo_sandbox_001' to authoritative workspaceId
+    if (cleaned === 'demo' || cleaned === 'ws_demo_sandbox_001') {
+      return 'ws_demo_sandbox_001';
+    }
+    return cleaned;
+  }
+
+  /**
+   * Exposes authoritative Firestore workspaceId resolution (SES v4.5)
+   */
+  public static resolveFirestoreWorkspaceId(slugOrId?: string): string {
+    return this.cleanSlug(slugOrId);
   }
 
   /**

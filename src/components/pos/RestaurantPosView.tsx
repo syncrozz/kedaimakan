@@ -44,12 +44,17 @@ import { formatCurrency } from '../../services/formatters';
 import { AdminAuthService } from '../../services/adminAuthService';
 import { pushRoute } from '../../services/urlRouter';
 import { KotService } from '../../services/kotService';
-import { LayoutGrid, Layers, PlusCircle, ChefHat, ShieldAlert, Download, UploadCloud } from 'lucide-react';
+import { LayoutGrid, Layers, PlusCircle, ChefHat, ShieldAlert, Download, UploadCloud, Package } from 'lucide-react';
 import { DuplicateAuditModal } from '../common/DuplicateAuditModal';
 import { DuplicateAuditService, DuplicateGroup } from '../../services/duplicateAuditService';
 import { RestaurantCsvService } from '../../services/restaurantCsvService';
 import { RestaurantCsvImportModal } from '../menu/RestaurantCsvImportModal';
 import { RestaurantClearDataModal } from './RestaurantClearDataModal';
+import { Product } from '../../types';
+import { UnifiedCompletedOrderRecord } from '../../types/restaurant';
+import { CrossSuiteCheckoutService } from '../../services/crossSuiteCheckoutService';
+import { RetailItemPickerModal } from './RetailItemPickerModal';
+import { UnifiedOrderReceiptModal } from './UnifiedOrderReceiptModal';
 
 export const RestaurantPosView: React.FC = () => {
   const {
@@ -74,6 +79,8 @@ export const RestaurantPosView: React.FC = () => {
     clearRestaurantData,
     loadSampleRestaurantData,
     businessConfig,
+    products,
+    commitCrossSuiteCheckout,
   } = useStore();
 
   // Search & Category Tab
@@ -108,6 +115,64 @@ export const RestaurantPosView: React.FC = () => {
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [cashReceivedInput, setCashReceivedInput] = useState<string>('');
   const [kitchenNotes, setKitchenNotes] = useState<string>('');
+
+  // Cross-Suite Retail Checkout States (SES v4.5)
+  const [isRetailPickerOpen, setIsRetailPickerOpen] = useState(false);
+  const [unifiedCompletedOrder, setUnifiedCompletedOrder] = useState<UnifiedCompletedOrderRecord | null>(null);
+  const [isUnifiedReceiptOpen, setIsUnifiedReceiptOpen] = useState(false);
+
+  // Add retail item from NiagaPOS catalog to active restaurant order
+  const handleAddRetailProduct = (product: Product) => {
+    if (product.active === false) {
+      setErrorMessage(`Produk "${product.name}" tidak aktif.`);
+      return;
+    }
+
+    const existingIndex = orderItems.findIndex(
+      (it) => it.itemType === 'RETAIL' && (it.retailProductId === product.id || it.retailSku === product.sku)
+    );
+
+    if (existingIndex >= 0) {
+      const existingItem = orderItems[existingIndex];
+      if (existingItem.quantity + 1 > product.currentStock) {
+        setErrorMessage(`Stok produk "${product.name}" tidak mencukupi (Baki: ${product.currentStock}).`);
+        return;
+      }
+      const nextItems = [...orderItems];
+      const nextQty = existingItem.quantity + 1;
+      nextItems[existingIndex] = {
+        ...existingItem,
+        quantity: nextQty,
+        lineTotal: Math.round((existingItem.unitTotal * nextQty - (existingItem.discountAmount || 0)) * 100) / 100,
+      };
+      setOrderItems(nextItems);
+    } else {
+      if (product.currentStock < 1) {
+        setErrorMessage(`Produk "${product.name}" telah kehabisan stok.`);
+        return;
+      }
+      const newOrderItem: RestaurantOrderItem = {
+        id: `ITEM-RTL-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        itemType: 'RETAIL',
+        retailProductId: product.id,
+        retailSku: product.sku,
+        nameSnapshot: product.name,
+        categorySnapshot: product.category || 'Barangan Runcit',
+        kitchenStation: 'NONE',
+        basePriceSnapshot: product.sellingPrice,
+        costPriceSnapshot: product.costPrice,
+        selectedModifiers: [],
+        unitTotal: product.sellingPrice,
+        quantity: 1,
+        discountType: 'NONE',
+        discountValue: 0,
+        discountAmount: 0,
+        lineTotal: product.sellingPrice,
+      };
+      setOrderItems((prev) => [...prev, newOrderItem]);
+    }
+    setErrorMessage(null);
+  };
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [lastCompletedOrder, setLastCompletedOrder] = useState<any | null>(null);
 
@@ -192,6 +257,17 @@ export const RestaurantPosView: React.FC = () => {
           if (item.id !== lineId) return item;
           const newQty = item.quantity + delta;
           if (newQty <= 0) return null;
+
+          // Cross-Suite Retail stock constraint check
+          if (item.itemType === 'RETAIL' && delta > 0) {
+            const prod = products.find(
+              (p) => p.id === (item.retailProductId || item.menuItemId) || p.sku === item.retailSku
+            );
+            if (prod && newQty > prod.currentStock) {
+              setErrorMessage(`Stok produk "${prod.name}" tidak mencukupi (Baki: ${prod.currentStock}).`);
+              return item;
+            }
+          }
 
           const gross = item.unitTotal * newQty;
           let newDiscountAmount = 0;
@@ -397,7 +473,7 @@ export const RestaurantPosView: React.FC = () => {
   // Selesaikan Pesanan Restoran & Bayaran (Status Meja bertukar ke CLEANING atau AVAILABLE)
   const handleCompleteOrder = () => {
     if (orderItems.length === 0) {
-      setErrorMessage('Sila pilih sekurang-kurangnya satu hidangan.');
+      setErrorMessage('Sila pilih sekurang-kurangnya satu hidangan atau barangan runcit.');
       return;
     }
 
@@ -408,64 +484,74 @@ export const RestaurantPosView: React.FC = () => {
       return;
     }
 
-    const orderRecord = {
-      orderId: `ORD-${Date.now().toString().slice(-6)}`,
-      orderType,
-      tableNumber: orderType === 'DINE_IN' ? tableNumber : undefined,
-      guestCount: orderType === 'DINE_IN' ? guestCount : undefined,
-      customerName: customerName || (orderType === 'DINE_IN' ? `Meja ${tableNumber}` : 'Pelanggan Walk-in'),
-      items: orderItems,
-      grossSubtotal,
-      totalDiscounts: totalItemDiscounts,
-      serviceChargeAmount,
-      taxAmount,
-      grandTotal,
-      cashTendered,
-      changeDue,
-      timestamp: new Date().toISOString(),
-      cashierName: activeStaff ? activeStaff.name : 'Store Owner',
-    };
-
-    // Jika Dine-In, kemas kini meja kepada status CLEANING (Perlu dibersihkan)
-    if (orderType === 'DINE_IN') {
-      const targetTable = tables.find((t) => t.tableNumber === tableNumber);
-      if (targetTable) {
-        updateTableStatus(
-          targetTable.id,
-          'CLEANING',
-          `Bayaran bil ${orderRecord.orderId} selesai, meja perlu dibersihkan`
-        );
-      }
-    }
-
-    // KOT Synchronization for completed order / Takeaway / Delivery (SES v4.5)
     const currentSlug = activeWorkspaceSlug || 'default';
-    KotService.createOrGetKitchenTicket(
-      {
-        orderId: orderRecord.orderId,
-        tableId: orderType === 'DINE_IN' ? tableNumber : undefined,
-        tableName: orderType === 'DINE_IN' ? `Meja ${tableNumber}` : undefined,
-        orderType,
-        items: orderItems,
-        customerName: orderRecord.customerName,
-        guestCount: orderType === 'DINE_IN' ? guestCount : undefined,
-        notes: kitchenNotes,
-        operator: orderRecord.cashierName,
-      },
-      currentSlug
-    ).then(({ isNew }) => {
-      if (isNew) {
-        KotService.playNewKotChime();
-      }
-    }).catch(console.error);
+    const checkoutOperationId = CrossSuiteCheckoutService.generateOperationId();
 
-    setLastCompletedOrder(orderRecord);
-    setIsSuccessModalOpen(true);
-    setOrderItems([]);
-    setEditingOrderId(null);
-    setCashReceivedInput('');
-    setKitchenNotes('');
-    setErrorMessage(null);
+    try {
+      // Authoritative Cross-Suite Checkout with Idempotency & Inventory Deduction (SES v4.5)
+      const result = CrossSuiteCheckoutService.processCheckout({
+        checkoutOperationId,
+        orderId: `ORD-${Date.now().toString().slice(-6)}`,
+        orderType,
+        tableNumber: orderType === 'DINE_IN' ? tableNumber : undefined,
+        guestCount: orderType === 'DINE_IN' ? guestCount : undefined,
+        customerName: customerName || (orderType === 'DINE_IN' ? `Meja ${tableNumber}` : 'Pelanggan Walk-in'),
+        cashierName: activeStaff ? activeStaff.name : 'Store Owner',
+        items: orderItems,
+        taxConfig,
+        cashTendered,
+        workspaceId: currentSlug,
+        availableProducts: products,
+      });
+
+      // Synchronize authoritative stock deductions & movements
+      commitCrossSuiteCheckout(result);
+
+      // Jika Dine-In, kemas kini meja kepada status CLEANING (Perlu dibersihkan)
+      if (orderType === 'DINE_IN') {
+        const targetTable = tables.find((t) => t.tableNumber === tableNumber);
+        if (targetTable) {
+          updateTableStatus(
+            targetTable.id,
+            'CLEANING',
+            `Bayaran bil ${result.completedOrder.orderId} selesai, meja perlu dibersihkan`
+          );
+        }
+      }
+
+      // KOT Synchronization: KotService automatically excludes retail items (Directive 7)
+      KotService.createOrGetKitchenTicket(
+        {
+          orderId: result.completedOrder.orderId,
+          tableId: orderType === 'DINE_IN' ? tableNumber : undefined,
+          tableName: orderType === 'DINE_IN' ? `Meja ${tableNumber}` : undefined,
+          orderType,
+          items: orderItems,
+          customerName: result.completedOrder.customerName,
+          guestCount: orderType === 'DINE_IN' ? guestCount : undefined,
+          notes: kitchenNotes,
+          operator: result.completedOrder.cashierName,
+        },
+        currentSlug
+      )
+        .then(({ isNew }) => {
+          if (isNew) {
+            KotService.playNewKotChime();
+          }
+        })
+        .catch(console.error);
+
+      setLastCompletedOrder(result.completedOrder as any);
+      setUnifiedCompletedOrder(result.completedOrder);
+      setIsUnifiedReceiptOpen(true);
+      setOrderItems([]);
+      setEditingOrderId(null);
+      setCashReceivedInput('');
+      setKitchenNotes('');
+      setErrorMessage(null);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Ralat semasa memproses checkout.');
+    }
   };
 
   return (
@@ -863,15 +949,26 @@ export const RestaurantPosView: React.FC = () => {
                   Pesanan Semasa ({orderItems.reduce((a, b) => a + b.quantity, 0)} item)
                 </span>
               </div>
-              {orderItems.length > 0 && (
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleClearOrder}
-                  className="text-[11px] text-rose-400 hover:text-rose-300 hover:underline"
+                  id="restaurant-add-retail-item-btn"
+                  onClick={() => setIsRetailPickerOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 transition cursor-pointer"
                 >
-                  Kosongkan
+                  <Package className="w-3.5 h-3.5" />
+                  <span>+ Runcit (NiagaPOS)</span>
                 </button>
-              )}
+                {orderItems.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearOrder}
+                    className="text-[11px] text-rose-400 hover:text-rose-300 hover:underline cursor-pointer"
+                  >
+                    Kosongkan
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Senarai Item dalam Troli */}
@@ -888,10 +985,16 @@ export const RestaurantPosView: React.FC = () => {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <h5 className="text-xs font-bold text-white leading-tight">
                             {item.nameSnapshot}
                           </h5>
+                          {item.itemType === 'RETAIL' && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-950 text-blue-300 border border-blue-800 flex items-center gap-0.5">
+                              <Package className="w-2.5 h-2.5" />
+                              <span>Runcit</span>
+                            </span>
+                          )}
                           {item.discountAmount > 0 && (
                             <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800 flex items-center gap-1">
                               {item.isLockedAfterApproval && <ShieldCheck className="w-3 h-3 text-amber-400" />}
@@ -899,6 +1002,11 @@ export const RestaurantPosView: React.FC = () => {
                             </span>
                           )}
                         </div>
+                        {item.itemType === 'RETAIL' && item.retailSku && (
+                          <div className="text-[10px] font-mono text-stone-500 mt-0.5">
+                            SKU: {item.retailSku} &bull; NiagaPOS
+                          </div>
+                        )}
 
                         {/* Modifiers dipilih */}
                         {item.selectedModifiers.length > 0 && (
@@ -1208,6 +1316,29 @@ export const RestaurantPosView: React.FC = () => {
         onOpenReservationModal={(table) => {
           setSelectedTableForDetail(null);
           setTableForReservation(table);
+        }}
+      />
+
+      {/* Modal Pemilihan Barangan Runcit NiagaPOS (SES v4.5) */}
+      <RetailItemPickerModal
+        isOpen={isRetailPickerOpen}
+        products={products}
+        currentCartItems={orderItems}
+        onClose={() => setIsRetailPickerOpen(false)}
+        onSelectProduct={(p) => {
+          handleAddRetailProduct(p);
+        }}
+      />
+
+      {/* Modal Resit Pembayaran Bersepadu (SES v4.5) */}
+      <UnifiedOrderReceiptModal
+        isOpen={isUnifiedReceiptOpen}
+        order={unifiedCompletedOrder}
+        taxConfig={taxConfig}
+        storeName={store.name}
+        onClose={() => {
+          setIsUnifiedReceiptOpen(false);
+          setIsSuccessModalOpen(false);
         }}
       />
 

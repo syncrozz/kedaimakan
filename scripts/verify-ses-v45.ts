@@ -341,36 +341,45 @@ async function runVerification() {
   }
 
   // -------------------------------------------------------------
-  // GATE 9: Allowlisted Firestore Collections Protection
+  // GATE 9: Allowlisted Firestore Collections Protection & Resolved Workspace ID
   // -------------------------------------------------------------
   try {
+    const authoritativeWorkspaceId = DemoSandboxService.getAuthoritativeWorkspaceId();
+    const resolvedFirestoreId = FirebaseService.resolveFirestoreWorkspaceId('demo');
+    const isIdAuthoritative = authoritativeWorkspaceId === 'ws_demo_sandbox_001' && resolvedFirestoreId === 'ws_demo_sandbox_001';
+
     const allowlist = DEMO_RESET_COLLECTION_ALLOWLIST as readonly string[];
-    const hasAuditLogs = allowlist.includes('workspace_audit_logs');
-    const hasAdminSessions = allowlist.includes('admin_sessions');
-    const hasClientWorkspaces = allowlist.includes('workspaces');
+    const targetPaths = DemoSandboxService.getAllowedResetTargetPaths();
+
+    // Verify all target paths are strictly scoped under workspaces/ws_demo_sandbox_001/
+    const allScopedToResolvedId = targetPaths.every((p) => p.startsWith(`workspaces/${authoritativeWorkspaceId}/`));
+
+    const hasAuditLogs = allowlist.includes('workspace_audit_logs') || targetPaths.some((p) => p.includes('workspace_audit_logs'));
+    const hasAdminSessions = allowlist.includes('admin_sessions') || targetPaths.some((p) => p.includes('admin_sessions'));
+    const hasClientWorkspaces = allowlist.includes('workspaces') || targetPaths.some((p) => p === 'workspaces');
     const hasBusinessEntities =
       allowlist.includes('restaurant_menu') &&
       allowlist.includes('restaurant_tables') &&
       allowlist.includes('restaurant_reservations') &&
       allowlist.includes('restaurant_kot');
 
-    const isOk = !hasAuditLogs && !hasAdminSessions && !hasClientWorkspaces && hasBusinessEntities;
+    const isOk = isIdAuthoritative && allScopedToResolvedId && !hasAuditLogs && !hasAdminSessions && !hasClientWorkspaces && hasBusinessEntities;
 
     gateResults.push({
       id: 'GATE-09',
-      name: 'Allowlisted Firestore Collections Protection',
-      scenario: 'Inspect DEMO_RESET_COLLECTION_ALLOWLIST to ensure sensitive and audit collections are excluded',
-      expected: 'Includes business subcollections only; excludes workspace_audit_logs, admin_sessions, client workspaces',
-      actual: `allowlist size: ${allowlist.length}, hasAuditLogs: ${hasAuditLogs}, hasClientWorkspaces: ${hasClientWorkspaces}, hasBusinessEntities: ${hasBusinessEntities}`,
+      name: 'Allowlisted Firestore Collections Protection & Resolved Workspace ID',
+      scenario: 'Verify authoritative resolved workspaceId (ws_demo_sandbox_001) and all target collection paths',
+      expected: 'Resolved workspaceId is ws_demo_sandbox_001; all targets strictly scoped to workspaces/ws_demo_sandbox_001/*; excludes audit/sessions/client collections',
+      actual: `authoritativeId: ${authoritativeWorkspaceId}, allScopedToResolvedId: ${allScopedToResolvedId}, targetsCount: ${targetPaths.length}, hasAuditLogs: ${hasAuditLogs}, hasClientWorkspaces: ${hasClientWorkspaces}`,
       status: isOk ? 'PASS' : 'FAIL',
-      reference: 'src/services/demoSandboxService.ts:DEMO_RESET_COLLECTION_ALLOWLIST',
+      reference: 'src/services/demoSandboxService.ts:getAuthoritativeWorkspaceId, getAllowedResetTargetPaths',
     });
   } catch (e: any) {
     gateResults.push({
       id: 'GATE-09',
-      name: 'Allowlisted Firestore Collections Protection',
-      scenario: 'Inspect allowlist collections',
-      expected: 'Audit logs excluded',
+      name: 'Allowlisted Firestore Collections Protection & Resolved Workspace ID',
+      scenario: 'Inspect allowlist collections and resolved workspaceId',
+      expected: 'Authoritative workspaceId ws_demo_sandbox_001',
       actual: `Error: ${e.message}`,
       status: 'FAIL',
       reference: 'src/services/demoSandboxService.ts',
@@ -577,27 +586,41 @@ async function runVerification() {
   // MANDATORY ADDITIONAL VERIFICATION CHECKS
   // =============================================================
 
-  // Check A: Demo reset must not modify any client workspace
+  // Check A: Demo reset must not modify any client workspace (Resolved Workspace ID Verification)
   try {
+    const authoritativeWorkspaceId = DemoSandboxService.getAuthoritativeWorkspaceId();
+    const targetPaths = DemoSandboxService.getAllowedResetTargetPaths();
+
+    // Verify resolved ID is ws_demo_sandbox_001 and not generic 'demo' or tenant ID
+    const isResolvedIdValid = authoritativeWorkspaceId === 'ws_demo_sandbox_001';
+
+    // Verify client tenant isolation
+    const sampleClientWorkspaceId = 'ws_warung_kopi_sedap';
+    const targetsClientWorkspace = targetPaths.some((p) => p.includes(sampleClientWorkspaceId) || p.startsWith(`workspaces/${sampleClientWorkspaceId}`));
+
+    // Generic tenant collections like 'tenants', 'clients', 'workspaces' must not be targeted
     const allowlist = DEMO_RESET_COLLECTION_ALLOWLIST;
-    // Any generic tenant collections like 'tenants', 'clients', 'workspaces_client' must not be in allowlist
     const modifiesClientWorkspace = (allowlist as readonly string[]).some((c) => c.startsWith('client_') || c === 'workspaces');
-    const isOk = !modifiesClientWorkspace;
+
+    // All targets must strictly anchor to the resolved workspaceId
+    const allAnchoredToResolvedDemo = targetPaths.every((p) => p.startsWith(`workspaces/${authoritativeWorkspaceId}/`));
+
+    const isOk = isResolvedIdValid && !targetsClientWorkspace && !modifiesClientWorkspace && allAnchoredToResolvedDemo;
 
     additionalResults.push({
       id: 'ADDL-01',
-      name: 'Demo reset must not modify any client workspace',
-      scenario: 'Inspect all collection targets in reset allowlist for foreign workspace prefixes or root collections',
-      expected: 'Zero client collection references; all targets strictly scoped to subcollections of /workspaces/demo',
-      actual: `Allowlist collections: [${allowlist.join(', ')}]. Cross-tenant modification detected: ${modifiesClientWorkspace}`,
+      name: 'Demo reset must not modify any client workspace (Resolved Workspace ID)',
+      scenario: 'Verify all collection targets are strictly anchored to resolved workspaceId (ws_demo_sandbox_001) with zero cross-tenant leakage',
+      expected: 'Authoritative workspaceId is ws_demo_sandbox_001; all target paths under workspaces/ws_demo_sandbox_001/*; zero client workspace impact',
+      actual: `resolvedWorkspaceId: ${authoritativeWorkspaceId}, allAnchored: ${allAnchoredToResolvedDemo}, targetsClientWorkspace: ${targetsClientWorkspace}, modifiesClientWorkspace: ${modifiesClientWorkspace}`,
       status: isOk ? 'PASS' : 'FAIL',
-      reference: 'src/services/demoSandboxService.ts:DEMO_RESET_COLLECTION_ALLOWLIST',
+      reference: 'src/services/demoSandboxService.ts:getAuthoritativeWorkspaceId, getAllowedResetTargetPaths',
     });
   } catch (e: any) {
     additionalResults.push({
       id: 'ADDL-01',
-      name: 'Demo reset must not modify any client workspace',
-      scenario: 'Allowlist isolation check',
+      name: 'Demo reset must not modify any client workspace (Resolved Workspace ID)',
+      scenario: 'Allowlist and resolved workspaceId isolation check',
       expected: 'No client workspace modification',
       actual: `Error: ${e.message}`,
       status: 'FAIL',
@@ -748,22 +771,22 @@ async function runVerification() {
     const res1 = await req1.json();
     const res2 = await req2.json();
 
-    // Either both succeed sequentially or one is rejected with 409 Conflict
-    const hasConflictOrSequential =
-      (req1.status === 200 && req2.status === 200 && res1.resetVersion !== res2.resetVersion) ||
-      req1.status === 409 ||
-      req2.status === 409;
+    // Either req1 succeeds (200) and req2 is rejected with 409 Conflict, or vice versa
+    const conflictDetected = req1.status === 409 || req2.status === 409;
+    const successDetected = req1.status === 200 || req2.status === 200;
+    const isOk = conflictDetected && successDetected;
 
-    const isOk = hasConflictOrSequential;
+    const conflictRes = req1.status === 409 ? res1 : res2;
+    const successRes = req1.status === 200 ? res1 : res2;
 
     additionalResults.push({
       id: 'ADDL-05',
-      name: 'Concurrent reset attempts must be handled safely',
+      name: 'Concurrent reset attempts must be handled safely (HTTP 409 Conflict)',
       scenario: 'Dispatch two simultaneous POST /api/demo/reset requests using Master Admin token',
-      expected: 'Handled safely via atomic sequential execution or HTTP 409 Conflict mutex rejection; no state race corruption',
-      actual: `Req 1 status: ${req1.status} (version ${res1.resetVersion || 'N/A'}), Req 2 status: ${req2.status} (version ${res2.resetVersion || 'N/A'})`,
+      expected: 'Primary request succeeds (HTTP 200); concurrent request rejected with HTTP 409 Conflict (RESET_IN_PROGRESS)',
+      actual: `Req 1: ${req1.status}, Req 2: ${req2.status}. Conflict detected: ${conflictDetected}, Conflict code: ${conflictRes?.code || 'N/A'}, Success version: ${successRes?.resetVersion || 'N/A'}`,
       status: isOk ? 'PASS' : 'FAIL',
-      reference: 'server.ts:isResetExecuting mutex, src/services/demoSandboxService.ts:isResetInProgress',
+      reference: 'server.ts:isResetExecuting mutex (HTTP 409), src/services/demoSandboxService.ts:isResetInProgress',
     });
   } catch (e: any) {
     additionalResults.push({

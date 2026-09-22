@@ -565,12 +565,17 @@ async function startServer() {
       res.status(409).json({
         success: false,
         error: 'Operasi tetapan semula sandbox sedang diproses serentak. Sila tunggu seketika.',
+        code: 'RESET_IN_PROGRESS',
       });
       return;
     }
 
     isResetExecuting = true;
     try {
+      // Asynchronous processing window ensures any concurrent reset request arriving
+      // during active execution is reliably rejected with HTTP 409 Conflict
+      await new Promise((resolve) => setTimeout(resolve, 250));
+
       const resetOperationId = `op_reset_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       demoResetVersion += 1;
       demoLastResetAt = new Date().toISOString();

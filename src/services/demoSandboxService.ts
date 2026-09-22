@@ -63,11 +63,34 @@ export class DemoSandboxService {
   private static isResetInProgress = false;
 
   /**
+   * SES v4.5: Returns the authoritative workspaceId resolved for Demo Sandbox
+   */
+  public static getAuthoritativeWorkspaceId(): string {
+    return DEMO_WORKSPACE_ID; // 'ws_demo_sandbox_001'
+  }
+
+  /**
+   * SES v4.5: Returns the verified Firestore collection path for a demo subcollection
+   */
+  public static getDemoCollectionPath(collectionName?: string): string {
+    return collectionName
+      ? `workspaces/${DEMO_WORKSPACE_ID}/${collectionName}`
+      : `workspaces/${DEMO_WORKSPACE_ID}`;
+  }
+
+  /**
+   * SES v4.5: Returns all verified Firestore target paths for allowlisted reset
+   */
+  public static getAllowedResetTargetPaths(): string[] {
+    return DEMO_RESET_COLLECTION_ALLOWLIST.map((col) => `workspaces/${DEMO_WORKSPACE_ID}/${col}`);
+  }
+
+  /**
    * Check if current workspace context is the demo sandbox
    */
   public static isDemoWorkspace(slugOrId?: string): boolean {
     const clean = (slugOrId || '').trim().toLowerCase();
-    return clean === 'demo' || clean === DEMO_WORKSPACE_ID;
+    return clean === 'demo' || clean === DEMO_WORKSPACE_ID || clean === 'ws_demo_sandbox_001';
   }
 
   /**
@@ -124,6 +147,7 @@ export class DemoSandboxService {
 
       // 2. Detach only Demo-scoped Firestore listeners
       update('DETACHING_LISTENERS', 'Memutuskan pendengar data workspace demo secara berasingan...', 15);
+      FirebaseService.detachWorkspaceListeners(DEMO_WORKSPACE_ID);
       FirebaseService.detachWorkspaceListeners(DEMO_WORKSPACE_SLUG);
 
       // 3. Server Authorization & Operation Registration
@@ -138,7 +162,12 @@ export class DemoSandboxService {
 
       if (!authRes.ok) {
         const errJson = await authRes.json().catch(() => ({}));
-        const msg = errJson.error || `Pengesahan pelayan gagal (${authRes.status})`;
+        let msg = errJson.error;
+        if (authRes.status === 409) {
+          msg = 'Operasi tetapan semula sandbox sedang diproses serentak oleh sesi lain. Sila tunggu seketika.';
+        } else if (!msg) {
+          msg = `Pengesahan pelayan gagal (${authRes.status})`;
+        }
         update('FAILED', msg, 30, msg);
         throw new Error(msg);
       }
@@ -190,72 +219,78 @@ export class DemoSandboxService {
   }
 
   /**
-   * Purge only allowlisted subcollections under workspaces/demo
+   * Purge only allowlisted subcollections under workspaces/ws_demo_sandbox_001
+   * (and cleans legacy workspaces/demo path to prevent ghost data).
    */
   private static async purgeAllowlistedCollections(db: any): Promise<void> {
-    for (const colName of DEMO_RESET_COLLECTION_ALLOWLIST) {
-      try {
-        const colRef = collection(db, 'workspaces', DEMO_WORKSPACE_SLUG, colName);
-        const snapshot = await getDocs(colRef);
-        if (!snapshot.empty) {
-          // Process in batches of 450 (Firestore limit is 500)
-          const docs = snapshot.docs;
-          for (let i = 0; i < docs.length; i += 450) {
-            const batch = writeBatch(db);
-            const chunk = docs.slice(i, i + 450);
-            chunk.forEach((d) => batch.delete(d.ref));
-            await batch.commit();
+    const targetWorkspaceIds = [DEMO_WORKSPACE_ID, DEMO_WORKSPACE_SLUG];
+
+    for (const wsIdentifier of targetWorkspaceIds) {
+      for (const colName of DEMO_RESET_COLLECTION_ALLOWLIST) {
+        try {
+          const colRef = collection(db, 'workspaces', wsIdentifier, colName);
+          const snapshot = await getDocs(colRef);
+          if (!snapshot.empty) {
+            // Process in batches of 450 (Firestore limit is 500)
+            const docs = snapshot.docs;
+            for (let i = 0; i < docs.length; i += 450) {
+              const batch = writeBatch(db);
+              const chunk = docs.slice(i, i + 450);
+              chunk.forEach((d) => batch.delete(d.ref));
+              await batch.commit();
+            }
           }
+        } catch (err) {
+          console.warn(`[Demo Sandbox] Warning purging collection ${colName} in ${wsIdentifier}:`, err);
         }
-      } catch (err) {
-        console.warn(`[Demo Sandbox] Warning purging collection ${colName}:`, err);
       }
     }
   }
 
   /**
    * Inject deterministic seed using setDoc to ensure strict idempotency
+   * Targets authoritative /workspaces/ws_demo_sandbox_001/*
    */
   private static async injectDeterministicSeed(db: any): Promise<void> {
     const batch = writeBatch(db);
 
     // 1. Menu Items
     for (const item of DEMO_OFFICIAL_SEED.menuItems) {
-      const docRef = doc(db, 'workspaces', DEMO_WORKSPACE_SLUG, 'restaurant_menu', item.id);
+      const docRef = doc(db, 'workspaces', DEMO_WORKSPACE_ID, 'restaurant_menu', item.id);
       batch.set(docRef, JSON.parse(JSON.stringify(item)));
     }
 
     // 2. Tables
     for (const table of DEMO_OFFICIAL_SEED.tables) {
-      const docRef = doc(db, 'workspaces', DEMO_WORKSPACE_SLUG, 'restaurant_tables', table.id);
+      const docRef = doc(db, 'workspaces', DEMO_WORKSPACE_ID, 'restaurant_tables', table.id);
       batch.set(docRef, JSON.parse(JSON.stringify(table)));
     }
 
     // 3. Reservations
     for (const res of DEMO_OFFICIAL_SEED.reservations) {
-      const docRef = doc(db, 'workspaces', DEMO_WORKSPACE_SLUG, 'restaurant_reservations', res.id);
+      const docRef = doc(db, 'workspaces', DEMO_WORKSPACE_ID, 'restaurant_reservations', res.id);
       batch.set(docRef, JSON.parse(JSON.stringify(res)));
     }
 
     // 4. KOT Tickets
     for (const kot of DEMO_OFFICIAL_SEED.sampleKotTickets) {
-      const docRef = doc(db, 'workspaces', DEMO_WORKSPACE_SLUG, 'restaurant_kot', kot.id);
+      const docRef = doc(db, 'workspaces', DEMO_WORKSPACE_ID, 'restaurant_kot', kot.id);
       batch.set(docRef, JSON.parse(JSON.stringify(kot)));
     }
 
     // 5. Tax Config
-    const taxDocRef = doc(db, 'workspaces', DEMO_WORKSPACE_SLUG, 'restaurant_settings', 'tax_config');
+    const taxDocRef = doc(db, 'workspaces', DEMO_WORKSPACE_ID, 'restaurant_settings', 'tax_config');
     batch.set(taxDocRef, JSON.parse(JSON.stringify(DEMO_OFFICIAL_SEED.taxConfig)));
 
     // 6. Customers
     for (const cust of DEMO_OFFICIAL_SEED.customers) {
-      const docRef = doc(db, 'workspaces', DEMO_WORKSPACE_SLUG, 'customers', cust.id);
+      const docRef = doc(db, 'workspaces', DEMO_WORKSPACE_ID, 'customers', cust.id);
       batch.set(docRef, JSON.parse(JSON.stringify(cust)));
     }
 
     // 7. Products
     for (const prod of DEMO_OFFICIAL_SEED.products) {
-      const docRef = doc(db, 'workspaces', DEMO_WORKSPACE_SLUG, 'products', prod.id);
+      const docRef = doc(db, 'workspaces', DEMO_WORKSPACE_ID, 'products', prod.id);
       batch.set(docRef, JSON.parse(JSON.stringify(prod)));
     }
 
@@ -264,21 +299,22 @@ export class DemoSandboxService {
 
   /**
    * Verification Gate: Verify seeded document counts in Firestore match expected seed
+   * Queries authoritative /workspaces/ws_demo_sandbox_001/*
    */
   private static async verifySeededCounts(db: any): Promise<{ verified: boolean; reason?: string }> {
     const expected = getSeedExpectedCounts();
 
-    const menuSnap = await getDocs(collection(db, 'workspaces', DEMO_WORKSPACE_SLUG, 'restaurant_menu'));
+    const menuSnap = await getDocs(collection(db, 'workspaces', DEMO_WORKSPACE_ID, 'restaurant_menu'));
     if (menuSnap.size !== expected.menuItems) {
       return { verified: false, reason: `Menu count mismatch: found ${menuSnap.size}, expected ${expected.menuItems}` };
     }
 
-    const tableSnap = await getDocs(collection(db, 'workspaces', DEMO_WORKSPACE_SLUG, 'restaurant_tables'));
+    const tableSnap = await getDocs(collection(db, 'workspaces', DEMO_WORKSPACE_ID, 'restaurant_tables'));
     if (tableSnap.size !== expected.tables) {
       return { verified: false, reason: `Tables count mismatch: found ${tableSnap.size}, expected ${expected.tables}` };
     }
 
-    const taxSnap = await getDoc(doc(db, 'workspaces', DEMO_WORKSPACE_SLUG, 'restaurant_settings', 'tax_config'));
+    const taxSnap = await getDoc(doc(db, 'workspaces', DEMO_WORKSPACE_ID, 'restaurant_settings', 'tax_config'));
     if (!taxSnap.exists()) {
       return { verified: false, reason: 'Tax configuration record was not seeded' };
     }

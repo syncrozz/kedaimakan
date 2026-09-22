@@ -66,6 +66,7 @@ import {
 import { MenuService, DEFAULT_TAX_CONFIG } from '../services/menuService';
 import { TableService } from '../services/tableService';
 import { TemplateService } from '../services/templateService';
+import { CrossSuiteCheckoutResult } from '../services/crossSuiteCheckoutService';
 
 export interface ClearCategoriesOptions {
   products?: boolean;
@@ -216,6 +217,8 @@ interface StoreContextType {
     tables?: boolean;
     menu?: boolean;
   }) => void;
+  // SYNCROZZ Cross-Suite Retail Checkout (SES v4.5)
+  commitCrossSuiteCheckout: (result: CrossSuiteCheckoutResult) => void;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -2506,6 +2509,35 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  /**
+   * SES v4.5: Commits cross-suite retail checkout outcomes authoritatively.
+   * Atomically synchronizes updated product stock and inventory movements locally and to Cloud.
+   */
+  const commitCrossSuiteCheckout = (result: CrossSuiteCheckoutResult) => {
+    if (!result || !result.success) return;
+
+    // 1. Commit updated products
+    if (result.updatedProducts && result.updatedProducts.length > 0) {
+      setProducts((prev) => {
+        const updateMap = new Map(result.updatedProducts.map((p) => [p.id, p]));
+        const next = prev.map((p) => updateMap.get(p.id) || p);
+        StorageService.safeSet(STORAGE_KEYS.PRODUCTS, next);
+        return next;
+      });
+      result.updatedProducts.forEach((p) => FirebaseService.syncProduct(p));
+    }
+
+    // 2. Commit retail movements
+    if (result.retailMovements && result.retailMovements.length > 0) {
+      setMovements((prev) => {
+        const next = [...result.retailMovements, ...prev];
+        StorageService.safeSet(STORAGE_KEYS.MOVEMENTS, next);
+        return next;
+      });
+      result.retailMovements.forEach((m) => FirebaseService.syncMovement(m));
+    }
+  };
+
   return (
     <StoreContext.Provider
       value={{
@@ -2602,6 +2634,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         refreshMenuData,
         clearRestaurantData,
         loadSampleRestaurantData,
+        commitCrossSuiteCheckout,
       }}
     >
       {children}

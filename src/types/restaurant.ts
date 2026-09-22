@@ -13,7 +13,7 @@ export type TableStatus =
   | 'CLEANING' 
   | 'UNAVAILABLE';
 
-export type KitchenStation = 'KITCHEN' | 'BAR' | 'DESSERT';
+export type KitchenStation = 'KITCHEN' | 'BAR' | 'DESSERT' | 'NONE';
 
 export interface MenuVariant {
   id: string;
@@ -72,13 +72,19 @@ export interface SelectedVariantSnapshot {
 
 export type DiscountType = 'PERCENTAGE' | 'FIXED' | 'NONE';
 
+export type RestaurantItemType = 'RESTAURANT' | 'RETAIL';
+
 export interface RestaurantOrderItem {
   id: string; // ID unik bagi baris pesanan
-  menuItemId: string;
+  itemType?: RestaurantItemType; // RESTAURANT (default) | RETAIL
+  menuItemId?: string; // Authoritative ID untuk hidangan menu restoran (KEDAI MAKAN)
+  retailProductId?: string; // Authoritative ID produk runcit NiagaPOS
+  retailSku?: string; // SKU barangan runcit NiagaPOS
   nameSnapshot: string;
   categorySnapshot: string;
   kitchenStation: KitchenStation;
   basePriceSnapshot: number; // Harga asas satu unit (mengambil kira variasi jika dipilih)
+  costPriceSnapshot?: number; // Snapshot kos untuk barangan runcit NiagaPOS (COGS)
   selectedVariant?: SelectedVariantSnapshot; // Snapshot variasi terpilih
   selectedModifiers: SelectedModifierSnapshot[];
   unitTotal: number; // basePriceSnapshot + jumlah modifiers per unit
@@ -157,6 +163,37 @@ export interface RestaurantActiveOrderSummary {
   netAmount: number;
   openedAt: string;
   items: RestaurantOrderItem[];
+}
+
+export type CrossSuiteCheckoutState =
+  | 'INITIATED'
+  | 'VALIDATING'
+  | 'PAYMENT_PROCESSING'
+  | 'RETAIL_INVENTORY_COMMITTED'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'RECOVERY_REQUIRED';
+
+export interface UnifiedCompletedOrderRecord {
+  orderId: string;
+  checkoutOperationId: string;
+  orderType: RestaurantOrderType;
+  tableNumber?: string;
+  guestCount?: number;
+  customerName: string;
+  items: RestaurantOrderItem[];
+  restaurantItems: RestaurantOrderItem[];
+  retailItems: RestaurantOrderItem[];
+  grossSubtotal: number;
+  totalDiscounts: number;
+  serviceChargeAmount: number;
+  taxAmount: number;
+  grandTotal: number;
+  cashTendered: number;
+  changeDue: number;
+  timestamp: string;
+  cashierName: string;
+  status: 'COMPLETED';
 }
 
 export interface RestaurantTable {
