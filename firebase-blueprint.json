@@ -324,10 +324,58 @@
         "serviceChargePercent": { "type": "number" }
       },
       "required": ["taxEnabled", "taxRatePercent", "serviceChargeEnabled", "serviceChargePercent"]
+    },
+    "SystemCheck": {
+      "title": "SystemCheck",
+      "description": "System connection and health check document",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string" },
+        "testedAt": { "type": "string" },
+        "client": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["status"]
+    },
+    "KitchenOrderTicket": {
+      "title": "KitchenOrderTicket",
+      "description": "Tenant kitchen order tickets for KDS",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceSlug": { "type": "string" },
+        "orderId": { "type": "string" },
+        "orderNumber": { "type": "string" },
+        "tableId": { "type": "string" },
+        "tableName": { "type": "string" },
+        "orderType": { "type": "string" },
+        "status": { "type": "string", "enum": ["NEW", "PREPARING", "READY", "ARCHIVED"] },
+        "items": { "type": "array" },
+        "hasUnreadUpdate": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "workspaceSlug", "orderId", "orderNumber", "orderType", "status", "items", "createdAt", "updatedAt"]
+    },
+    "KitchenAuditRecord": {
+      "title": "KitchenAuditRecord",
+      "description": "Tenant kitchen order ticket lifecycle audit log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workspaceSlug": { "type": "string" },
+        "kotId": { "type": "string" },
+        "orderId": { "type": "string" },
+        "action": { "type": "string" },
+        "performedBy": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "workspaceSlug", "kotId", "orderId", "action", "performedBy", "timestamp"]
     }
   },
   "firestore": {
     "/system/{docId}": {
+      "schema": "SystemCheck",
       "description": "System health and connection check documents"
     },
     "/stores/{storeId}": {
@@ -455,9 +503,11 @@
       "description": "Tenant restaurant tax and service fee configuration"
     },
     "/workspaces/{workspaceId}/kitchenOrders/{kotId}": {
+      "schema": "KitchenOrderTicket",
       "description": "Tenant kitchen order tickets for KDS"
     },
     "/workspaces/{workspaceId}/kitchenAudit/{auditId}": {
+      "schema": "KitchenAuditRecord",
       "description": "Tenant kitchen order ticket lifecycle audit log"
     }
   }

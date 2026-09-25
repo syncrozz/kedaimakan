@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search,
   ShoppingCart,
@@ -14,7 +14,10 @@ import {
   History,
   Coins,
   UtensilsCrossed,
+  Utensils,
+  Coffee,
   Settings,
+  ChevronDown,
   Percent,
   Clock,
   MessageSquare,
@@ -86,6 +89,35 @@ export const RestaurantPosView: React.FC = () => {
   // Search & Category Tab
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [selectedSuperCategory, setSelectedSuperCategory] = useState<'ALL' | 'FOOD' | 'BEVERAGE'>('ALL');
+
+  // Helper function to detect if category / item is beverage
+  const isDrinkCategory = (categoryName: string) => {
+    const lower = (categoryName || '').toLowerCase();
+    return (
+      lower.includes('minum') ||
+      lower.includes('drink') ||
+      lower.includes('beverage') ||
+      lower.includes('kopi') ||
+      lower.includes('teh') ||
+      lower.includes('jus') ||
+      lower.includes('air')
+    );
+  };
+
+  const isDrinkItem = (item: MenuItem) => {
+    if (item.kitchenStation === 'BAR') return true;
+    return isDrinkCategory(item.category);
+  };
+
+  // Counts for Food and Beverage
+  const foodItemsCount = useMemo(() => {
+    return menuItems.filter((m) => m.active && !isDrinkItem(m)).length;
+  }, [menuItems]);
+
+  const beverageItemsCount = useMemo(() => {
+    return menuItems.filter((m) => m.active && isDrinkItem(m)).length;
+  }, [menuItems]);
 
   // Restaurant View Tab: 'MENU' | 'TABLES' (SES v4.5 Default Table Grid or Fast Menu)
   const [activeRestaurantTab, setActiveRestaurantTab] = useState<'TABLES' | 'MENU'>(() => {
@@ -99,7 +131,27 @@ export const RestaurantPosView: React.FC = () => {
   const [auditType, setAuditType] = useState<'TABLE' | 'MENU_ITEM'>('TABLE');
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
   const [isClearDataModalOpen, setIsClearDataModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const settingsDropdownRef = useRef<HTMLDivElement>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Close Settings Dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        settingsDropdownRef.current &&
+        !settingsDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsSettingsOpen(false);
+      }
+    };
+    if (isSettingsOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isSettingsOpen]);
 
   // Restaurant Order Header State
   const [orderType, setOrderType] = useState<RestaurantOrderType>('DINE_IN');
@@ -189,10 +241,20 @@ export const RestaurantPosView: React.FC = () => {
 
   const activeWorkspaceSlug = AdminAuthService.detectActiveWorkspaceSlug() || undefined;
 
-  // Filter Menu Items by Category & Search
+  // Filter Menu Items by Super Category (Makanan / Minuman), Subcategory & Search
   const filteredMenuItems = useMemo(() => {
     return menuItems.filter((item) => {
       if (!item.active) return false;
+
+      // Super category filtering (Makanan vs Minuman)
+      if (selectedSuperCategory === 'FOOD' && isDrinkItem(item)) {
+        return false;
+      }
+      if (selectedSuperCategory === 'BEVERAGE' && !isDrinkItem(item)) {
+        return false;
+      }
+
+      // Specific Category filtering
       const matchesCat = selectedCategory === 'ALL' || item.category === selectedCategory;
       const matchesSearch =
         !searchQuery.trim() ||
@@ -200,7 +262,7 @@ export const RestaurantPosView: React.FC = () => {
         item.code.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCat && matchesSearch;
     });
-  }, [menuItems, selectedCategory, searchQuery]);
+  }, [menuItems, selectedCategory, selectedSuperCategory, searchQuery]);
 
   // Handle click on Menu Card
   const handleItemCardClick = (item: MenuItem) => {
@@ -578,14 +640,23 @@ export const RestaurantPosView: React.FC = () => {
               type="button"
               id="restaurant-tab-menu-btn"
               onClick={() => setActiveRestaurantTab('MENU')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeRestaurantTab === 'MENU'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-stone-400 hover:text-stone-200'
+                  ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400/40'
+                  : 'text-stone-200 bg-stone-900/80 hover:bg-stone-800 hover:text-white border border-stone-700/60 shadow-xs'
               }`}
             >
-              <UtensilsCrossed className="w-3.5 h-3.5" />
+              <UtensilsCrossed className={`w-3.5 h-3.5 ${activeRestaurantTab === 'MENU' ? 'text-white' : 'text-emerald-400'}`} />
               <span>Menu &amp; Pesanan</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-semibold transition ${
+                  activeRestaurantTab === 'MENU'
+                    ? 'bg-emerald-700/80 text-emerald-100'
+                    : 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/40'
+                }`}
+              >
+                {menuItems.length}
+              </span>
             </button>
           </div>
 
@@ -603,98 +674,203 @@ export const RestaurantPosView: React.FC = () => {
           </button>
         </div>
 
-        {/* SES v4.5 Standardized Actions: [Audit Duplikasi] -> [Eksport CSV] -> [Import CSV] -> [Tambah Baharu] */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* 1. Audit Duplikasi */}
+        {/* Bahagian Tetapan (Icon Gear di Hujung Kanan Atas) */}
+        <div className="relative" ref={settingsDropdownRef}>
           <button
             type="button"
-            id="restaurant-audit-duplikasi-btn"
-            onClick={() => {
-              if (activeRestaurantTab === 'TABLES') {
-                const groups = DuplicateAuditService.auditTables(tables);
-                setAuditGroups(groups);
-                setAuditTitle('Meja Restoran');
-                setAuditType('TABLE');
-              } else {
-                const groups = DuplicateAuditService.auditMenuItems(menuItems);
-                setAuditGroups(groups);
-                setAuditTitle('Menu Restoran');
-                setAuditType('MENU_ITEM');
-              }
-              setIsDuplicateAuditOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-stone-800/80 hover:bg-amber-950/40 text-amber-300 border border-amber-500/30 transition cursor-pointer"
-            title="Audit Duplikasi (SES v4.5)"
+            id="restaurant-settings-gear-btn"
+            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+            className={`group flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer shadow-xs ${
+              isSettingsOpen
+                ? 'bg-stone-800 text-white border-emerald-500/60 ring-2 ring-emerald-500/20'
+                : 'bg-stone-800/90 hover:bg-stone-700/90 text-stone-200 hover:text-white border-stone-700/90'
+            }`}
+            title="Tetapan &amp; Alat Operasi"
           >
-            <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Audit Duplikasi</span>
+            <Settings className={`w-4 h-4 text-emerald-400 group-hover:rotate-45 transition-transform duration-300 ${isSettingsOpen ? 'rotate-90' : ''}`} />
+            <span>Tetapan {activeRestaurantTab === 'TABLES' ? 'Meja' : 'Menu'}</span>
+            <ChevronDown className={`w-3.5 h-3.5 text-stone-400 transition-transform duration-200 ${isSettingsOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          {/* 2. Eksport CSV */}
-          <button
-            type="button"
-            id="restaurant-export-csv-btn"
-            onClick={() => {
-              if (activeRestaurantTab === 'TABLES') {
-                RestaurantCsvService.exportTablesToCsv(tables, activeWorkspaceSlug);
-              } else {
-                RestaurantCsvService.exportMenuToCsv(menuItems, activeWorkspaceSlug);
-              }
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-stone-800/80 hover:bg-stone-700 text-stone-300 hover:text-white border border-stone-700 transition cursor-pointer"
-            title="Eksport CSV"
-          >
-            <Download className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden sm:inline">Eksport CSV</span>
-          </button>
+          {/* Panel Dropdown Tetapan */}
+          {isSettingsOpen && (
+            <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-stone-900/95 backdrop-blur-md border border-stone-700/90 rounded-2xl shadow-2xl z-50 p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+              <div className="px-3 py-2 border-b border-stone-800 flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Settings className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Tetapan {activeRestaurantTab === 'TABLES' ? 'Meja' : 'Menu'}</span>
+                  </h4>
+                  <p className="text-[10px] text-stone-400 mt-0.5">
+                    Konfigurasi, alat sandaran CSV &amp; audit duplikasi
+                  </p>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-stone-800 text-stone-300 font-mono">
+                  SES v4.5
+                </span>
+              </div>
 
-          {/* 3. Import CSV */}
-          <button
-            type="button"
-            id="restaurant-import-csv-btn"
-            onClick={() => setIsCsvImportOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-stone-800/80 hover:bg-stone-700 text-stone-300 hover:text-white border border-stone-700 transition cursor-pointer"
-            title="Import Menu CSV"
-          >
-            <UploadCloud className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="hidden sm:inline">Import CSV</span>
-          </button>
+              {/* 1. Tambah Baharu */}
+              <div className="p-1">
+                {activeRestaurantTab === 'TABLES' ? (
+                  <button
+                    type="button"
+                    id="add-table-definition-btn"
+                    onClick={() => {
+                      setIsSettingsOpen(false);
+                      setIsAddTableModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/50 transition cursor-pointer group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                      <PlusCircle className="w-4.5 h-4.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-white group-hover:text-emerald-200">
+                        Tambah Meja Baharu
+                      </div>
+                      <div className="text-[11px] text-emerald-400/80 truncate">
+                        Daftar nombor meja, zon &amp; kapasiti
+                      </div>
+                    </div>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    id="open-menu-management-btn"
+                    onClick={() => {
+                      setIsSettingsOpen(false);
+                      setIsMenuManagementOpen(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/50 transition cursor-pointer group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                      <PlusCircle className="w-4.5 h-4.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-white group-hover:text-emerald-200">
+                        Tambah Menu Baharu
+                      </div>
+                      <div className="text-[11px] text-emerald-400/80 truncate">
+                        Daftar hidangan, harga &amp; varian
+                      </div>
+                    </div>
+                  </button>
+                )}
+              </div>
 
-          {/* 4. Mula Dari Kosong (Reset Data Demo / Pilihan Kategori) */}
-          {(tables.length > 0 || menuItems.length > 0 || reservations.length > 0) && (
-            <button
-              type="button"
-              id="restaurant-clear-data-zero-btn"
-              onClick={() => setIsClearDataModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-stone-800/80 hover:bg-rose-950/40 text-rose-300 hover:text-rose-200 border border-rose-800/50 hover:border-rose-600/60 transition cursor-pointer"
-              title="Mula Dari Kosong (Padamkan data demo meja, menu, atau semua)"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-              <span className="hidden sm:inline">Mula Dari Kosong</span>
-            </button>
-          )}
+              {/* 2. Audit Duplikasi */}
+              <button
+                type="button"
+                id="restaurant-audit-duplikasi-btn"
+                onClick={() => {
+                  setIsSettingsOpen(false);
+                  if (activeRestaurantTab === 'TABLES') {
+                    const groups = DuplicateAuditService.auditTables(tables);
+                    setAuditGroups(groups);
+                    setAuditTitle('Meja Restoran');
+                    setAuditType('TABLE');
+                  } else {
+                    const groups = DuplicateAuditService.auditMenuItems(menuItems);
+                    setAuditGroups(groups);
+                    setAuditTitle('Menu Restoran');
+                    setAuditType('MENU_ITEM');
+                  }
+                  setIsDuplicateAuditOpen(true);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-stone-800/80 text-stone-200 transition cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-stone-100 group-hover:text-amber-300">
+                    Audit Duplikasi
+                  </div>
+                  <div className="text-[10px] text-stone-400 truncate">
+                    Imbas &amp; atasi rekod bertindih (SES v4.5)
+                  </div>
+                </div>
+              </button>
 
-          {/* 5. Tambah Baharu */}
-          {activeRestaurantTab === 'TABLES' ? (
-            <button
-              type="button"
-              id="add-table-definition-btn"
-              onClick={() => setIsAddTableModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-xs cursor-pointer"
-            >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span>Tambah Meja</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              id="open-menu-management-btn"
-              onClick={() => setIsMenuManagementOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-xs cursor-pointer"
-            >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span>Tambah Menu</span>
-            </button>
+              {/* 3. Eksport CSV */}
+              <button
+                type="button"
+                id="restaurant-export-csv-btn"
+                onClick={() => {
+                  setIsSettingsOpen(false);
+                  if (activeRestaurantTab === 'TABLES') {
+                    RestaurantCsvService.exportTablesToCsv(tables, activeWorkspaceSlug);
+                  } else {
+                    RestaurantCsvService.exportMenuToCsv(menuItems, activeWorkspaceSlug);
+                  }
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-stone-800/80 text-stone-200 transition cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
+                  <Download className="w-3.5 h-3.5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-stone-100 group-hover:text-sky-300">
+                    Eksport CSV
+                  </div>
+                  <div className="text-[10px] text-stone-400 truncate">
+                    Muat turun sandaran fail .csv
+                  </div>
+                </div>
+              </button>
+
+              {/* 4. Import CSV */}
+              <button
+                type="button"
+                id="restaurant-import-csv-btn"
+                onClick={() => {
+                  setIsSettingsOpen(false);
+                  setIsCsvImportOpen(true);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-stone-800/80 text-stone-200 transition cursor-pointer group"
+              >
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                  <UploadCloud className="w-3.5 h-3.5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-stone-100 group-hover:text-emerald-300">
+                    Import CSV
+                  </div>
+                  <div className="text-[10px] text-stone-400 truncate">
+                    Muat naik fail CSV secara pukal
+                  </div>
+                </div>
+              </button>
+
+              {/* 5. Mula Dari Kosong (Zon Padam Data) */}
+              {(tables.length > 0 || menuItems.length > 0 || reservations.length > 0) && (
+                <>
+                  <div className="border-t border-stone-800 my-1" />
+                  <button
+                    type="button"
+                    id="restaurant-clear-data-zero-btn"
+                    onClick={() => {
+                      setIsSettingsOpen(false);
+                      setIsClearDataModalOpen(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left hover:bg-rose-950/40 text-rose-300 border border-rose-900/30 hover:border-rose-600/50 transition cursor-pointer group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-semibold text-rose-200 group-hover:text-rose-100">
+                        Mula Dari Kosong
+                      </div>
+                      <div className="text-[10px] text-rose-400/80 truncate">
+                        Padam data demo meja, tempahan, atau menu
+                      </div>
+                    </div>
+                  </button>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -767,37 +943,137 @@ export const RestaurantPosView: React.FC = () => {
               />
             </div>
 
-            {/* Tab Kategori Menu */}
+            {/* Bar Pemisah Pantas: Makanan vs Minuman (Super Category) */}
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-stone-950 rounded-xl border border-stone-800/80">
+              <button
+                type="button"
+                id="filter-all-supercat-btn"
+                onClick={() => {
+                  setSelectedSuperCategory('ALL');
+                  setSelectedCategory('ALL');
+                }}
+                className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  selectedSuperCategory === 'ALL'
+                    ? 'bg-stone-800 text-white shadow-xs border border-stone-700/80'
+                    : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900/50'
+                }`}
+              >
+                <span>Semua Menu</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-stone-900 font-mono text-stone-300">
+                  {menuItems.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                id="filter-food-supercat-btn"
+                onClick={() => {
+                  setSelectedSuperCategory('FOOD');
+                  setSelectedCategory('ALL');
+                }}
+                className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  selectedSuperCategory === 'FOOD'
+                    ? 'bg-amber-600 text-white shadow-sm ring-1 ring-amber-400/40'
+                    : 'text-amber-300/80 hover:text-amber-200 hover:bg-amber-950/20'
+                }`}
+              >
+                <Utensils className="w-3.5 h-3.5" />
+                <span>Makanan</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                    selectedSuperCategory === 'FOOD'
+                      ? 'bg-amber-700 text-amber-100'
+                      : 'bg-amber-950/60 text-amber-300 border border-amber-800/40'
+                  }`}
+                >
+                  {foodItemsCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                id="filter-beverage-supercat-btn"
+                onClick={() => {
+                  setSelectedSuperCategory('BEVERAGE');
+                  setSelectedCategory('ALL');
+                }}
+                className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  selectedSuperCategory === 'BEVERAGE'
+                    ? 'bg-sky-600 text-white shadow-sm ring-1 ring-sky-400/40 animate-pulse'
+                    : 'text-sky-300/80 hover:text-sky-200 hover:bg-sky-950/20'
+                }`}
+              >
+                <Coffee className="w-3.5 h-3.5" />
+                <span>Minuman</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                    selectedSuperCategory === 'BEVERAGE'
+                      ? 'bg-sky-700 text-sky-100'
+                      : 'bg-sky-950/60 text-sky-300 border border-sky-800/40'
+                  }`}
+                >
+                  {beverageItemsCount}
+                </span>
+              </button>
+            </div>
+
+            {/* Tab Kategori Menu Terperinci */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
               <button
                 type="button"
                 onClick={() => setSelectedCategory('ALL')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
                   selectedCategory === 'ALL'
-                    ? 'bg-emerald-600 text-white shadow-xs'
+                    ? selectedSuperCategory === 'BEVERAGE'
+                      ? 'bg-sky-600 text-white shadow-xs'
+                      : selectedSuperCategory === 'FOOD'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'bg-emerald-600 text-white shadow-xs'
                     : 'bg-stone-950 text-stone-400 hover:text-stone-200 border border-stone-800'
                 }`}
               >
-                Semua ({menuItems.length})
+                Semua Kategori (
+                {selectedSuperCategory === 'FOOD'
+                  ? foodItemsCount
+                  : selectedSuperCategory === 'BEVERAGE'
+                  ? beverageItemsCount
+                  : menuItems.length}
+                )
               </button>
-              {menuCategories.map((cat) => {
-                const count = menuItems.filter((m) => m.category === cat).length;
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                      selectedCategory === cat
-                        ? 'bg-emerald-600 text-white shadow-xs'
-                        : 'bg-stone-950 text-stone-400 hover:text-stone-200 border border-stone-800'
-                    }`}
-                  >
-                    <span>{cat}</span>
-                    <span className="text-[10px] opacity-70">({count})</span>
-                  </button>
-                );
-              })}
+              {menuCategories
+                .filter((cat) => {
+                  if (selectedSuperCategory === 'FOOD') return !isDrinkCategory(cat);
+                  if (selectedSuperCategory === 'BEVERAGE') return isDrinkCategory(cat);
+                  return true;
+                })
+                .map((cat) => {
+                  const isDrink = isDrinkCategory(cat);
+                  const count = menuItems.filter((m) => m.category === cat).length;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                        selectedCategory === cat
+                          ? isDrink
+                            ? 'bg-sky-600 text-white shadow-xs'
+                            : 'bg-emerald-600 text-white shadow-xs'
+                          : isDrink
+                          ? 'bg-sky-950/30 text-sky-300 hover:text-sky-100 border border-sky-900/50'
+                          : 'bg-stone-950 text-stone-400 hover:text-stone-200 border border-stone-800'
+                      }`}
+                    >
+                      {isDrink ? (
+                        <Coffee className="w-3 h-3 text-sky-400" />
+                      ) : (
+                        <Utensils className="w-3 h-3 text-amber-400" />
+                      )}
+                      <span>{cat}</span>
+                      <span className="text-[10px] opacity-70">({count})</span>
+                    </button>
+                  );
+                })}
             </div>
           </div>
 
@@ -816,7 +1092,9 @@ export const RestaurantPosView: React.FC = () => {
                   className={`relative p-3 rounded-2xl border flex flex-col justify-between transition-all select-none cursor-pointer ${
                     !item.isAvailable
                       ? 'bg-stone-950/60 border-stone-800/80 opacity-60'
-                      : 'bg-stone-900 border-stone-800 hover:border-emerald-500/60 hover:bg-stone-850 hover:shadow-md'
+                      : isDrinkItem(item)
+                      ? 'bg-stone-900 border-stone-800 hover:border-sky-500/70 hover:bg-stone-850 hover:shadow-md'
+                      : 'bg-stone-900 border-stone-800 hover:border-amber-500/70 hover:bg-stone-850 hover:shadow-md'
                   }`}
                 >
                   {/* Bilangan Dalam Troli Badge */}
@@ -828,9 +1106,22 @@ export const RestaurantPosView: React.FC = () => {
 
                   <div>
                     <div className="flex items-center justify-between gap-1 mb-1">
-                      <span className="text-[10px] font-mono font-bold text-stone-400 bg-stone-950 px-1.5 py-0.5 rounded border border-stone-800">
-                        {item.code}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-mono font-bold text-stone-400 bg-stone-950 px-1.5 py-0.5 rounded border border-stone-800">
+                          {item.code}
+                        </span>
+                        {isDrinkItem(item) ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-950/80 text-sky-400 border border-sky-800/50 flex items-center gap-0.5">
+                            <Coffee className="w-2.5 h-2.5" />
+                            <span>Air</span>
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-400 border border-amber-800/50 flex items-center gap-0.5">
+                            <Utensils className="w-2.5 h-2.5" />
+                            <span>Mkn</span>
+                          </span>
+                        )}
+                      </div>
                       <span
                         className={`text-[10px] font-semibold px-1.5 py-0.2 rounded border ${
                           item.isAvailable
@@ -973,6 +1264,38 @@ export const RestaurantPosView: React.FC = () => {
 
             {/* Senarai Item dalam Troli */}
             <div className="p-3 space-y-2.5 max-h-[380px] overflow-y-auto">
+              {/* Petunjuk Pintar: Selesai Makanan -> Lompat Terus ke Menu Minuman */}
+              {orderItems.length > 0 &&
+                orderItems.some((oi) => oi.itemType !== 'RETAIL' && oi.kitchenStation !== 'BAR' && !isDrinkCategory(oi.categorySnapshot)) &&
+                !orderItems.some((oi) => oi.itemType !== 'RETAIL' && (oi.kitchenStation === 'BAR' || isDrinkCategory(oi.categorySnapshot))) && (
+                  <div className="p-2.5 rounded-xl bg-gradient-to-r from-sky-950/60 to-stone-900 border border-sky-500/40 flex items-center justify-between gap-2 shadow-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-lg bg-sky-600/30 text-sky-400 flex items-center justify-center shrink-0">
+                        <Coffee className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold text-sky-200 truncate">
+                          Selesai pilih makanan?
+                        </p>
+                        <p className="text-[10px] text-sky-400/80 truncate">
+                          Pilih minuman untuk pelanggan
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      id="quick-jump-beverage-btn"
+                      onClick={() => {
+                        setSelectedSuperCategory('BEVERAGE');
+                        setSelectedCategory('ALL');
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-sky-600 hover:bg-sky-500 text-white shrink-0 flex items-center gap-1 shadow-xs transition cursor-pointer"
+                    >
+                      <span>Menu Minuman</span>
+                      <ChevronRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
               {orderItems.length === 0 ? (
                 <div className="py-10 text-center text-xs text-stone-500">
                   Pesanan masih kosong. Klik pada mana-mana menu hidangan untuk menambah ke pesanan.
