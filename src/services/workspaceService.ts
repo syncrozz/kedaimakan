@@ -17,17 +17,51 @@ import {
   Workspace,
   WorkspaceStatus,
   WorkspaceMember,
+  WorkspacePlatform,
+  SubscriptionPlan,
+  SubscriptionPaymentMethod,
+  WorkspacePaymentRecord,
   CreateWorkspaceInput,
   ClientAccessDetails,
 } from '../types/workspace';
 import { isValidSlug } from './urlRouter';
 import { FirebaseService, OperationType } from './firebaseService';
+import { TemplateService } from './templateService';
 import { doc, setDoc, getDoc, getDocs, collection, query, where, writeBatch, deleteDoc } from 'firebase/firestore';
 
 const WORKSPACES_LOCAL_KEY = 'niagapos_workspaces_v1';
 const WORKSPACE_MEMBERS_LOCAL_KEY = 'niagapos_workspace_members_v1';
 const DEFAULT_GRACE_PERIOD_DAYS = 7;
-export const PRODUCTION_DOMAIN = 'https://niagapos.syncrozz.com';
+export const RETAIL_PRODUCTION_DOMAIN = 'https://niagapos.syncrozz.com';
+export const RESTAURANT_PRODUCTION_DOMAIN = 'https://kedaimakan.syncrozz.com';
+export const PRODUCTION_DOMAIN = RETAIL_PRODUCTION_DOMAIN;
+
+export const SUBSCRIPTION_PRICING = {
+  MONTHLY: {
+    plan: 'MONTHLY' as const,
+    name: 'Pelan Bulanan',
+    price: 10,
+    currency: 'MYR',
+    periodDays: 30,
+    priceFormatted: 'RM10',
+    billingCycleText: 'setiap bulan',
+    durationText: '30 Hari',
+    description: 'Sesuai untuk perniagaan fleksibel tanpa komitmen jangka panjang.',
+    savingsBadge: null,
+  },
+  ANNUAL: {
+    plan: 'ANNUAL' as const,
+    name: 'Pelan Tahunan (Jimat)',
+    price: 110,
+    currency: 'MYR',
+    periodDays: 365,
+    priceFormatted: 'RM110',
+    billingCycleText: 'setiap tahun',
+    durationText: '365 Hari (1 Tahun)',
+    description: 'Paling jimat & berbaloi! Nikmati 12 bulan pada harga RM110 (Jimat RM10 berbanding bayaran bulanan).',
+    savingsBadge: 'JIMAT RM10',
+  },
+} as const;
 
 export const DEFAULT_DEMO_WORKSPACE: Workspace = {
   workspaceId: 'ws_demo_sandbox_001',
@@ -44,6 +78,7 @@ export const DEFAULT_DEMO_WORKSPACE: Workspace = {
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
   workspaceType: 'DEMO',
+  platform: 'RESTAURANT',
   demoMetadata: {
     demoSeedVersion: '1.0.0',
     demoAccessEnabled: true,
@@ -90,11 +125,61 @@ export class WorkspaceService {
   }
 
   /**
-   * Generates official Client Access URL
+   * Authoritative platform normalization (SES v4.5):
+   * 1. If ws.platform is explicitly RESTAURANT or RETAIL, preserve it.
+   * 2. If existing authoritative restaurant configuration exists, classify as RESTAURANT.
+   * 3. Otherwise default to RETAIL.
+   * 
+   * Strict Rule: Zero slug/name/email heuristics.
    */
-  public static getClientAccessUrl(workspaceSlug: string): string {
-    const clean = workspaceSlug.trim().toLowerCase();
-    return `${PRODUCTION_DOMAIN}/${clean}`;
+  public static normalizeWorkspacePlatform(ws: Workspace): Workspace {
+    if (!ws) return ws;
+    if (ws.platform === 'RESTAURANT' || ws.platform === 'RETAIL') {
+      return ws;
+    }
+    if (TemplateService.hasAuthoritativeRestaurantConfig(ws.workspaceSlug)) {
+      return { ...ws, platform: 'RESTAURANT' };
+    }
+    return { ...ws, platform: 'RETAIL' };
+  }
+
+  /**
+   * Generates authoritative platform-aware Client Access URL:
+   * RESTAURANT → https://kedaimakan.syncrozz.com/{workspaceSlug}
+   * RETAIL     → https://niagapos.syncrozz.com/{workspaceSlug}
+   * LEGACY     → https://niagapos.syncrozz.com/{workspaceSlug} (when legacy: true)
+   * 
+   * Strict rule: Zero slug heuristics (no name/substring/email inference).
+   */
+  public static getClientAccessUrl(
+    workspaceOrSlug: Workspace | string,
+    options?: { legacy?: boolean }
+  ): string {
+    let ws: Workspace | null = null;
+    let slug = '';
+
+    if (typeof workspaceOrSlug === 'string') {
+      slug = workspaceOrSlug.trim().toLowerCase();
+      ws = this.getWorkspaceBySlug(slug);
+    } else if (workspaceOrSlug && typeof workspaceOrSlug === 'object') {
+      ws = this.normalizeWorkspacePlatform(workspaceOrSlug);
+      slug = (ws.workspaceSlug || '').trim().toLowerCase();
+    }
+
+    if (!slug) return RETAIL_PRODUCTION_DOMAIN;
+
+    // Legacy override: always returns niagapos.syncrozz.com/{slug}
+    if (options?.legacy) {
+      return `${RETAIL_PRODUCTION_DOMAIN}/${slug}`;
+    }
+
+    const platform = ws?.platform;
+    if (platform === 'RESTAURANT') {
+      return `${RESTAURANT_PRODUCTION_DOMAIN}/${slug}`;
+    }
+
+    // Default to Retail / NiagaPOS domain (no slug heuristics)
+    return `${RETAIL_PRODUCTION_DOMAIN}/${slug}`;
   }
 
   /**
@@ -108,7 +193,7 @@ export class WorkspaceService {
         const snap = await getDocs(colRef);
         const list: Workspace[] = [];
         snap.forEach((d) => {
-          list.push(d.data() as Workspace);
+          list.push(this.normalizeWorkspacePlatform(d.data() as Workspace));
         });
         // Keep local cache synced
         this.saveWorkspacesLocal(list);
@@ -136,7 +221,7 @@ export class WorkspaceService {
       if (!list.some((w) => w.workspaceSlug.toLowerCase() === 'demo' || w.workspaceId === 'ws_demo_sandbox_001')) {
         list.push(DEFAULT_DEMO_WORKSPACE);
       }
-      return list;
+      return list.map((w) => this.normalizeWorkspacePlatform(w));
     } catch {
       return [DEFAULT_DEMO_WORKSPACE];
     }
@@ -282,7 +367,7 @@ export class WorkspaceService {
             const wsDocRef = doc(db, 'workspaces', workspaceId);
             const wsSnap = await getDoc(wsDocRef);
             if (wsSnap.exists()) {
-              const ws = wsSnap.data() as Workspace;
+              const ws = this.normalizeWorkspacePlatform(wsSnap.data() as Workspace);
               this.upsertLocalWorkspace(ws);
               return ws;
             }
@@ -293,7 +378,7 @@ export class WorkspaceService {
         const wsQuery = query(collection(db, 'workspaces'), where('workspaceSlug', '==', clean));
         const wsQuerySnap = await getDocs(wsQuery);
         if (!wsQuerySnap.empty) {
-          const ws = wsQuerySnap.docs[0].data() as Workspace;
+          const ws = this.normalizeWorkspacePlatform(wsQuerySnap.docs[0].data() as Workspace);
           this.upsertLocalWorkspace(ws);
           // Self-heal the slug registry index in Firestore
           try {
@@ -311,7 +396,7 @@ export class WorkspaceService {
         const directWsRef = doc(db, 'workspaces', clean);
         const directSnap = await getDoc(directWsRef);
         if (directSnap.exists()) {
-          const ws = directSnap.data() as Workspace;
+          const ws = this.normalizeWorkspacePlatform(directSnap.data() as Workspace);
           this.upsertLocalWorkspace(ws);
           return ws;
         }
@@ -321,14 +406,16 @@ export class WorkspaceService {
     }
 
     const all = this.getAllWorkspacesLocal();
-    return all.find((w) => w.workspaceSlug.toLowerCase() === clean) || null;
+    const found = all.find((w) => w.workspaceSlug.toLowerCase() === clean);
+    return found ? this.normalizeWorkspacePlatform(found) : null;
   }
 
   public static getWorkspaceBySlug(slug: string): Workspace | null {
     if (!slug) return null;
     const clean = slug.trim().toLowerCase();
     const all = this.getAllWorkspacesLocal();
-    return all.find((w) => w.workspaceSlug.toLowerCase() === clean) || null;
+    const found = all.find((w) => w.workspaceSlug.toLowerCase() === clean);
+    return found ? this.normalizeWorkspacePlatform(found) : null;
   }
 
   public static getWorkspaceById(id: string): Workspace | null {
@@ -389,6 +476,7 @@ export class WorkspaceService {
 
     const workspaceId = `ws_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
     const ownerUid = `owner_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+    const platform = input.platform || 'RETAIL';
 
     const newWorkspace: Workspace = {
       workspaceId,
@@ -410,6 +498,8 @@ export class WorkspaceService {
         saleCount: 0,
         totalRevenue: 0,
       },
+      workspaceType: 'CLIENT',
+      platform,
     };
 
     const ownerMember: WorkspaceMember = {
@@ -489,7 +579,7 @@ export class WorkspaceService {
       }).catch((e) => console.warn('[WorkspaceService] Server PIN init async notice:', e));
     } catch {}
 
-    const accessUrl = this.getClientAccessUrl(cleanSlug);
+    const accessUrl = this.getClientAccessUrl(newWorkspace);
 
     return {
       success: true,
@@ -531,6 +621,7 @@ export class WorkspaceService {
 
     const workspaceId = `ws_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
     const ownerUid = `owner_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+    const platform = input.platform || 'RETAIL';
 
     const newWorkspace: Workspace = {
       workspaceId,
@@ -552,6 +643,8 @@ export class WorkspaceService {
         saleCount: 0,
         totalRevenue: 0,
       },
+      workspaceType: 'CLIENT',
+      platform,
     };
 
     const ownerMember: WorkspaceMember = {
@@ -739,4 +832,97 @@ export class WorkspaceService {
     this.saveWorkspacesLocal(all);
     return { success: true, workspace: all[index] };
   }
+
+  /**
+   * Records a client subscription payment and activates/extends workspace access.
+   * Plan options:
+   * - MONTHLY: RM10 / month (+30 days)
+   * - ANNUAL: RM110 / year (+365 days, saves RM10)
+   */
+  public static async recordSubscriptionPayment(
+    workspaceId: string,
+    plan: 'MONTHLY' | 'ANNUAL',
+    options?: {
+      paymentMethod?: SubscriptionPaymentMethod;
+      referenceNote?: string;
+      customAmount?: number;
+      recordedBy?: string;
+    }
+  ): Promise<{ success: boolean; workspace?: Workspace; payment?: WorkspacePaymentRecord; error?: string }> {
+    const all = this.getAllWorkspacesLocal();
+    const index = all.findIndex((w) => w.workspaceId === workspaceId);
+    if (index === -1) return { success: false, error: 'Workspace tidak dijumpai.' };
+
+    const ws = all[index];
+    const planConfig = SUBSCRIPTION_PRICING[plan];
+    const amount = options?.customAmount ?? planConfig.price;
+    const additionalDays = planConfig.periodDays;
+
+    const currentExpiry = ws.subscriptionExpiresAt
+      ? new Date(ws.subscriptionExpiresAt).getTime()
+      : new Date(ws.trialExpiresAt).getTime();
+
+    // If subscription is still valid, append days to existing expiry; otherwise start from now
+    const baseTime = currentExpiry > Date.now() ? currentExpiry : Date.now();
+    const newExpiry = new Date(baseTime + additionalDays * 24 * 60 * 60 * 1000);
+    const newGrace = new Date(newExpiry.getTime() + (ws.gracePeriodDays || DEFAULT_GRACE_PERIOD_DAYS) * 24 * 60 * 60 * 1000);
+    const nowIso = new Date().toISOString();
+
+    const payment: WorkspacePaymentRecord = {
+      paymentId: `pay_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
+      plan,
+      amount,
+      currency: 'MYR',
+      periodDays: additionalDays,
+      paidAt: nowIso,
+      previousExpiresAt: new Date(baseTime).toISOString(),
+      newExpiresAt: newExpiry.toISOString(),
+      paymentMethod: options?.paymentMethod || 'DUITNOW_QR',
+      referenceNote: options?.referenceNote?.trim() || undefined,
+      recordedBy: options?.recordedBy || 'MASTER_ADMIN',
+    };
+
+    ws.subscriptionPlan = plan;
+    ws.subscriptionPrice = amount;
+    ws.subscriptionCurrency = 'MYR';
+    ws.subscriptionStartedAt = ws.subscriptionStartedAt || nowIso;
+    ws.subscriptionExpiresAt = newExpiry.toISOString();
+    ws.trialExpiresAt = newExpiry.toISOString();
+    ws.gracePeriodEndsAt = newGrace.toISOString();
+    ws.status = 'ACTIVE';
+    ws.lastPaymentAt = nowIso;
+    ws.lastPaymentAmount = amount;
+    if (options?.referenceNote) {
+      ws.lastPaymentReference = options.referenceNote.trim();
+    }
+    ws.paymentHistory = [...(ws.paymentHistory || []), payment];
+    ws.updatedAt = nowIso;
+
+    const db = FirebaseService.getDb();
+    if (db) {
+      try {
+        const wsRef = doc(db, 'workspaces', workspaceId);
+        await setDoc(wsRef, this.sanitize(ws), { merge: true });
+      } catch (err) {
+        console.warn('[WorkspaceService] Firestore recordSubscriptionPayment warning:', err);
+      }
+    }
+
+    all[index] = ws;
+    this.saveWorkspacesLocal(all);
+
+    return { success: true, workspace: ws, payment };
+  }
+}
+
+/**
+ * Authoritative Central URL Resolver function (SES v4.5)
+ * Preferred shape:
+ * getClientAccessUrl(workspace: Workspace, options?: { legacy?: boolean }): string
+ */
+export function getClientAccessUrl(
+  workspace: Workspace | string,
+  options?: { legacy?: boolean }
+): string {
+  return WorkspaceService.getClientAccessUrl(workspace, options);
 }

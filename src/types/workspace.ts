@@ -32,6 +32,26 @@ export interface WorkspaceAuthConfigData {
 
 export type WorkspaceType = 'CLIENT' | 'DEMO';
 
+export type WorkspacePlatform = 'RESTAURANT' | 'RETAIL';
+
+export type SubscriptionPlan = 'TRIAL' | 'MONTHLY' | 'ANNUAL';
+
+export type SubscriptionPaymentMethod = 'DUITNOW_QR' | 'BANK_TRANSFER' | 'CASH' | 'OTHER';
+
+export interface WorkspacePaymentRecord {
+  paymentId: string;
+  plan: 'MONTHLY' | 'ANNUAL';
+  amount: number; // 10 (Monthly) or 110 (Annual)
+  currency: string; // 'MYR'
+  periodDays: number; // 30 or 365
+  paidAt: string;
+  previousExpiresAt: string;
+  newExpiresAt: string;
+  paymentMethod: SubscriptionPaymentMethod;
+  referenceNote?: string;
+  recordedBy?: string;
+}
+
 export interface WorkspaceDemoMetadata {
   demoSeedVersion: string;
   demoAccessEnabled: boolean;
@@ -65,7 +85,17 @@ export interface Workspace {
     lastSaleAt?: string;
   };
   workspaceType?: WorkspaceType;
+  platform?: WorkspacePlatform;
   demoMetadata?: WorkspaceDemoMetadata;
+  subscriptionPlan?: SubscriptionPlan;
+  subscriptionPrice?: number;
+  subscriptionCurrency?: string;
+  subscriptionStartedAt?: string;
+  subscriptionExpiresAt?: string;
+  lastPaymentAt?: string;
+  lastPaymentAmount?: number;
+  lastPaymentReference?: string;
+  paymentHistory?: WorkspacePaymentRecord[];
 }
 
 export interface WorkspaceSlugRecord {
@@ -80,6 +110,7 @@ export interface CreateWorkspaceInput {
   ownerEmail: string;
   ownerName: string;
   trialDurationDays?: number;
+  platform?: WorkspacePlatform;
 }
 
 export interface ClientAccessDetails {

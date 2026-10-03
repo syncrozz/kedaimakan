@@ -23,10 +23,16 @@ import {
   X,
   Send,
   Loader2,
+  UtensilsCrossed,
+  Store,
 } from 'lucide-react';
-import { WorkspaceService } from '../../services/workspaceService';
+import {
+  WorkspaceService,
+  RETAIL_PRODUCTION_DOMAIN,
+  RESTAURANT_PRODUCTION_DOMAIN,
+} from '../../services/workspaceService';
 import { isValidSlug } from '../../services/urlRouter';
-import type { ClientAccessDetails } from '../../types/workspace';
+import type { ClientAccessDetails, WorkspacePlatform } from '../../types/workspace';
 
 interface CreateWorkspaceModalProps {
   isOpen: boolean;
@@ -41,6 +47,7 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
 }) => {
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceSlug, setWorkspaceSlug] = useState('');
+  const [platform, setPlatform] = useState<WorkspacePlatform>('RESTAURANT');
   const [ownerName, setOwnerName] = useState('');
   const [ownerEmail, setOwnerEmail] = useState('');
   const [trialDays, setTrialDays] = useState(30);
@@ -105,6 +112,7 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
         ownerName: cleanOwnerName,
         ownerEmail: cleanOwnerEmail,
         trialDurationDays: trialDays,
+        platform,
       });
 
       if (!res.success || !res.details) {
@@ -136,6 +144,7 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
   const handleClose = () => {
     setWorkspaceName('');
     setWorkspaceSlug('');
+    setPlatform('RESTAURANT');
     setOwnerName('');
     setOwnerEmail('');
     setTrialDays(30);
@@ -225,7 +234,7 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
                     )}
                   </button>
                   <a
-                    href={`/${createdDetails.workspace.workspaceSlug}`}
+                    href={createdDetails.accessUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="p-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white transition-colors shrink-0"
@@ -303,6 +312,48 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
           ) : (
             // Registration Form View
             <form id="create-workspace-form" onSubmit={handleSubmit} className="space-y-4">
+              {/* Platform Selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-stone-300 block">
+                  Sektor / Platform Perniagaan Klien
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setPlatform('RESTAURANT')}
+                    className={`p-3 rounded-xl border text-left transition flex items-start gap-2.5 cursor-pointer ${
+                      platform === 'RESTAURANT'
+                        ? 'bg-rose-950/40 border-rose-500 text-white ring-1 ring-rose-500'
+                        : 'bg-stone-950 border-stone-800 text-stone-400 hover:border-stone-700'
+                    }`}
+                  >
+                    <UtensilsCrossed className={`w-4 h-4 mt-0.5 shrink-0 ${platform === 'RESTAURANT' ? 'text-rose-400' : 'text-stone-500'}`} />
+                    <div>
+                      <div className="text-xs font-bold text-white">KEDAI MAKAN</div>
+                      <div className="text-[10px] text-stone-400 mt-0.5">Restoran, Cafe & Warung</div>
+                      <div className="text-[9px] font-mono text-rose-300 mt-1">kedaimakan.syncrozz.com</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPlatform('RETAIL')}
+                    className={`p-3 rounded-xl border text-left transition flex items-start gap-2.5 cursor-pointer ${
+                      platform === 'RETAIL'
+                        ? 'bg-emerald-950/40 border-emerald-500 text-white ring-1 ring-emerald-500'
+                        : 'bg-stone-950 border-stone-800 text-stone-400 hover:border-stone-700'
+                    }`}
+                  >
+                    <Store className={`w-4 h-4 mt-0.5 shrink-0 ${platform === 'RETAIL' ? 'text-emerald-400' : 'text-stone-500'}`} />
+                    <div>
+                      <div className="text-xs font-bold text-white">NiagaPOS Runcit</div>
+                      <div className="text-[10px] text-stone-400 mt-0.5">Kedai Runcit & Dagangan</div>
+                      <div className="text-[9px] font-mono text-emerald-300 mt-1">niagapos.syncrozz.com</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
               {/* Workspace Name */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-stone-300 flex items-center gap-1.5">
@@ -313,7 +364,7 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
                   id="ws-name-input"
                   type="text"
                   required
-                  placeholder="Cth: Kedai Runcit Makmur, Restoran Al-Barakah"
+                  placeholder={platform === 'RESTAURANT' ? "Cth: Kedai Makan Kak Nurul, Restoran Azam" : "Cth: Koperasi KPMBP, Lias Tyre"}
                   value={workspaceName}
                   onChange={(e) => handleNameChange(e.target.value)}
                   className="w-full bg-stone-950 border border-stone-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-stone-600 outline-none transition-all"
@@ -327,8 +378,8 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
                     <Globe className="w-3.5 h-3.5 text-emerald-400" />
                     <span>URL Slug (Pengecam Unik)</span>
                   </label>
-                  <span className="text-[10px] text-stone-500 font-mono">
-                    https://niagapos.syncrozz.com/{workspaceSlug || '{slug}'}
+                  <span className="text-[10px] text-stone-400 font-mono">
+                    {platform === 'RESTAURANT' ? RESTAURANT_PRODUCTION_DOMAIN : RETAIL_PRODUCTION_DOMAIN}/{workspaceSlug || '{slug}'}
                   </span>
                 </div>
                 <div className="flex items-center">
@@ -339,7 +390,7 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
                     id="ws-slug-input"
                     type="text"
                     required
-                    placeholder="kedai-makmur"
+                    placeholder={platform === 'RESTAURANT' ? "kedai-mama" : "koperasi-kpmbp"}
                     value={workspaceSlug}
                     onChange={(e) => handleSlugChange(e.target.value)}
                     className="flex-1 bg-stone-950 border border-stone-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-r-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-stone-600 outline-none transition-all"

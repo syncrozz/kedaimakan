@@ -572,6 +572,24 @@ export class TemplateService {
   }
 
   /**
+   * Semak sama ada workspace ini mempunyai konfigurasi templat restoran yang disimpan secara eksplisit.
+   * Authoritative indicator: Mengesahkan sama ada data templat restoran wujud tanpa menggunakan sebarang slug heuristic.
+   */
+  public static hasAuthoritativeRestaurantConfig(workspaceSlug: string): boolean {
+    if (!workspaceSlug) return false;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem(this.getStorageKey(workspaceSlug));
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return Boolean(parsed && parsed.templateId);
+        }
+      }
+    } catch {}
+    return false;
+  }
+
+  /**
    * Mengambil konfigurasi perniagaan untuk sesuatu workspace.
    * Jika belum ada, membina konfigurasi default (MAMAK_CAPATI / Wali Capati) tanpa memusnahkan data sedia ada.
    */

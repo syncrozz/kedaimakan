@@ -31,11 +31,17 @@ import {
   KeyRound,
   FileText,
   PlayCircle,
+  CreditCard,
 } from 'lucide-react';
-import { WorkspaceService, PRODUCTION_DOMAIN } from '../services/workspaceService';
+import {
+  WorkspaceService,
+  RETAIL_PRODUCTION_DOMAIN,
+  RESTAURANT_PRODUCTION_DOMAIN,
+} from '../services/workspaceService';
 import { ClientAuthService } from '../services/clientAuthService';
 import { CreateWorkspaceModal } from '../components/workspace/CreateWorkspaceModal';
 import { ResetPinConfirmModal } from '../components/admin/ResetPinConfirmModal';
+import { ManageSubscriptionModal } from '../components/admin/ManageSubscriptionModal';
 import { AuditLogsModal } from '../components/admin/AuditLogsModal';
 import { DemoResetConfirmModal } from '../components/demo/DemoResetConfirmModal';
 import { DemoVerificationModal } from '../components/admin/DemoVerificationModal';
@@ -69,6 +75,7 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
 
   // Reset PIN and Audit Log modals
   const [resetPinWorkspace, setResetPinWorkspace] = useState<Workspace | null>(null);
+  const [subscriptionWorkspace, setSubscriptionWorkspace] = useState<Workspace | null>(null);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [isDemoResetModalOpen, setIsDemoResetModalOpen] = useState(false);
   const [isDemoVerificationModalOpen, setIsDemoVerificationModalOpen] = useState(false);
@@ -127,10 +134,11 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
     }
   };
 
-  const handleCopyUrl = (slug: string) => {
-    const url = WorkspaceService.getClientAccessUrl(slug);
+  const handleCopyUrl = (ws: Workspace | string, legacy: boolean = false) => {
+    const url = WorkspaceService.getClientAccessUrl(ws, { legacy });
     navigator.clipboard.writeText(url);
-    setCopiedSlug(slug);
+    const slug = typeof ws === 'string' ? ws : ws.workspaceSlug;
+    setCopiedSlug(legacy ? `${slug}-legacy` : slug);
     setTimeout(() => setCopiedSlug(null), 2000);
   };
 
@@ -174,18 +182,40 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
 
   // Status Badge Helper
   const renderStatusBadge = (ws: Workspace) => {
+    if (ws.status === 'SUSPENDED') {
+      return (
+        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800">
+          Digantung
+        </span>
+      );
+    }
+
     const calculated = WorkspaceService.calculateTrialStatus(ws);
     switch (calculated) {
       case 'ACTIVE':
+        if (ws.subscriptionPlan === 'MONTHLY') {
+          return (
+            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
+              Bulanan (RM10/bln)
+            </span>
+          );
+        }
+        if (ws.subscriptionPlan === 'ANNUAL') {
+          return (
+            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800">
+              Tahunan (RM110/thn)
+            </span>
+          );
+        }
         return (
-          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
-            Aktif (Trial)
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800">
+            Percubaan (Trial)
           </span>
         );
       case 'TRIAL_ENDING':
         return (
           <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800">
-            Hampir Tamat
+            {ws.subscriptionPlan ? 'Langganan Hampir Tamat' : 'Percubaan Hampir Tamat'}
           </span>
         );
       case 'GRACE_PERIOD':
@@ -197,7 +227,7 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
       case 'EXPIRED':
         return (
           <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-red-950 text-red-300 border border-red-800">
-            Tamat Tempoh
+            {ws.subscriptionPlan ? 'Langganan Tamat' : 'Percubaan Tamat'}
           </span>
         );
       case 'SUSPENDED':
@@ -504,11 +534,19 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
                 className="w-full bg-stone-900 border border-stone-800 pl-9 pr-3 py-2 rounded-xl text-xs text-white placeholder-stone-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all"
               />
             </div>
-            <div className="text-xs text-stone-400 flex items-center gap-2">
+            <div className="text-xs text-stone-400 flex flex-wrap items-center gap-2">
               <span>Domain Pengeluaran:</span>
-              <code className="bg-stone-800 px-2 py-0.5 rounded text-emerald-400 font-mono text-[11px]">
-                {PRODUCTION_DOMAIN}
-              </code>
+              <div className="inline-flex items-center gap-1.5 flex-wrap">
+                <span className="inline-flex items-center gap-1 bg-stone-950 px-2 py-0.5 rounded border border-rose-900/50">
+                  <span className="text-[10px] text-rose-400 font-bold uppercase">Restoran</span>
+                  <code className="text-rose-300 font-mono text-[11px]">kedaimakan.syncrozz.com</code>
+                </span>
+                <span className="text-stone-600">•</span>
+                <span className="inline-flex items-center gap-1 bg-stone-950 px-2 py-0.5 rounded border border-emerald-900/50">
+                  <span className="text-[10px] text-emerald-400 font-bold uppercase">Runcit</span>
+                  <code className="text-emerald-300 font-mono text-[11px]">niagapos.syncrozz.com</code>
+                </span>
+              </div>
             </div>
           </div>
 
@@ -519,8 +557,8 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
                 <tr>
                   <th className="px-5 py-3">Nama Kedai &amp; Slug</th>
                   <th className="px-5 py-3">Pemilik (OWNER)</th>
-                  <th className="px-5 py-3">Status Kitaran Hayat</th>
-                  <th className="px-5 py-3">Baki Percubaan</th>
+                  <th className="px-5 py-3">Status &amp; Pelan</th>
+                  <th className="px-5 py-3">Baki Tempoh</th>
                   <th className="px-5 py-3">Pautan Akses Rasmi</th>
                   <th className="px-5 py-3 text-right">Tindakan Pentadbir</th>
                 </tr>
@@ -552,7 +590,9 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
                 ) : (
                   filteredWorkspaces.map((ws) => {
                     const remaining = WorkspaceService.getRemainingTime(ws);
-                    const accessUrl = WorkspaceService.getClientAccessUrl(ws.workspaceSlug);
+                    const accessUrl = WorkspaceService.getClientAccessUrl(ws);
+                    const legacyUrl = WorkspaceService.getClientAccessUrl(ws, { legacy: true });
+                    const isRestaurant = ws.platform === 'RESTAURANT';
                     return (
                       <tr key={ws.workspaceId} className="hover:bg-stone-800/40 transition-colors">
                         {/* Name & Slug */}
@@ -605,30 +645,80 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
 
                         {/* Access URL */}
                         <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-[11px] text-stone-300 truncate max-w-[200px]" title={accessUrl}>
-                              {accessUrl}
-                            </span>
-                            <button
-                              onClick={() => handleCopyUrl(ws.workspaceSlug)}
-                              className="p-1 rounded hover:bg-stone-800 text-stone-400 hover:text-white transition-colors"
-                              title="Salin Pautan"
-                            >
-                              {copiedSlug === ws.workspaceSlug ? (
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                            <a
-                              href={`/${ws.workspaceSlug}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="p-1 rounded hover:bg-stone-800 text-stone-400 hover:text-white transition-colors"
-                              title="Buka Workspace"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
+                          <div className="space-y-1.5">
+                            {/* Official Access Link */}
+                            <div>
+                              <div className="flex items-center gap-1 mb-0.5">
+                                <span className={`text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded ${
+                                  isRestaurant
+                                    ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60'
+                                    : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'
+                                }`}>
+                                  {isRestaurant ? 'Rasmi • Restoran' : 'Rasmi • Runcit'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono text-[11px] text-stone-200 truncate max-w-[210px]" title={accessUrl}>
+                                  {accessUrl}
+                                </span>
+                                <button
+                                  onClick={() => handleCopyUrl(ws, false)}
+                                  className="p-1 rounded hover:bg-stone-800 text-stone-400 hover:text-white transition-colors cursor-pointer"
+                                  title="Salin Pautan Rasmi"
+                                >
+                                  {copiedSlug === ws.workspaceSlug ? (
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                                <a
+                                  href={accessUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="p-1 rounded hover:bg-stone-800 text-stone-400 hover:text-white transition-colors"
+                                  title="Buka Pautan Rasmi"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              </div>
+                            </div>
+
+                            {/* Legacy Compatible Link for Restaurant Workspaces */}
+                            {isRestaurant && (
+                              <div className="pt-1 border-t border-stone-800/60">
+                                <div className="flex items-center gap-1 mb-0.5">
+                                  <span className="text-[8px] uppercase tracking-wider px-1 py-0.2 rounded bg-stone-900 border border-stone-800 text-stone-400">
+                                    Legasi • NiagaPOS
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-stone-400">
+                                  <span className="font-mono text-[10px] text-stone-400 truncate max-w-[190px]" title={legacyUrl}>
+                                    {legacyUrl}
+                                  </span>
+                                  <button
+                                    onClick={() => handleCopyUrl(ws, true)}
+                                    className="p-0.5 rounded hover:bg-stone-800 text-stone-500 hover:text-stone-300 transition-colors cursor-pointer"
+                                    title="Salin Pautan Legasi"
+                                  >
+                                    {copiedSlug === `${ws.workspaceSlug}-legacy` ? (
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                    ) : (
+                                      <Copy className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                  <a
+                                    href={legacyUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="p-0.5 rounded hover:bg-stone-800 text-stone-500 hover:text-stone-300 transition-colors"
+                                    title="Buka Pautan Legasi"
+                                  >
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </td>
 
@@ -641,21 +731,31 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
                                 if (onSelectWorkspace) {
                                   onSelectWorkspace(ws.workspaceSlug);
                                 } else {
-                                  window.location.href = `/${ws.workspaceSlug}`;
+                                  window.location.href = accessUrl;
                                 }
                               }}
-                              className="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1 transition-colors"
-                              title="Buka Workspace dalam Sesi"
+                              className="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                              title={`Buka ${ws.workspaceName} (${accessUrl})`}
                             >
                               <span>Buka POS</span>
                               <ArrowRight className="w-3 h-3" />
                             </button>
 
-                            {/* Extend Trial */}
+                            {/* Manage Subscription (RM10/mo or RM110/yr) */}
+                            <button
+                              onClick={() => setSubscriptionWorkspace(ws)}
+                              className="px-2.5 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                              title="Urus Langganan (Bulanan RM10 / Tahunan RM110)"
+                            >
+                              <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Langganan</span>
+                            </button>
+
+                            {/* Quick Extend +30 Days */}
                             <button
                               onClick={() => handleExtendTrial(ws.workspaceId, 30)}
                               className="px-2 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-medium transition-colors cursor-pointer"
-                              title="Lanjutkan 30 Hari"
+                              title="Lanjutkan 30 Hari Percuma"
                             >
                               +30 Hari
                             </button>
@@ -715,6 +815,18 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
         onClose={() => setResetPinWorkspace(null)}
         onSuccess={(msg) => {
           setStatusMessage({ text: msg, type: 'success' });
+          loadAuditLogs();
+        }}
+      />
+
+      {/* Subscription Management Modal (Monthly RM10 / Annual RM110) */}
+      <ManageSubscriptionModal
+        isOpen={Boolean(subscriptionWorkspace)}
+        workspace={subscriptionWorkspace}
+        onClose={() => setSubscriptionWorkspace(null)}
+        onSuccess={(updatedWs, msg) => {
+          setStatusMessage({ text: msg, type: 'success' });
+          loadWorkspaces();
           loadAuditLogs();
         }}
       />

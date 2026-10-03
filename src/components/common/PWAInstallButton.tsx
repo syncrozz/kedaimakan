@@ -5,6 +5,7 @@ import { NIAGAPOS_ASSETS } from '../../constants/branding';
 import { useStore } from '../../context/StoreContext';
 import { parseRoute } from '../../services/urlRouter';
 import { formatSlugToName } from '../../services/pwaManifestService';
+import { getClientAccessUrl, RETAIL_PRODUCTION_DOMAIN } from '../../services/workspaceService';
 
 interface PWAInstallButtonProps {
   className?: string;
@@ -39,7 +40,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   const fullUrl =
     typeof window !== 'undefined'
       ? `${window.location.origin}${activeSlug ? `/${activeSlug}` : ''}`
-      : `https://niagapos.syncrozz.com${activeSlug ? `/${activeSlug}` : ''}`;
+      : (activeSlug ? getClientAccessUrl(activeSlug) : RETAIL_PRODUCTION_DOMAIN);
 
   const handleInstallClick = async () => {
     if (isInstallable) {
