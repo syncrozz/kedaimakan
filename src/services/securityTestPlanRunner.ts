@@ -445,16 +445,107 @@ export function runSecurityTestPlan() {
     });
   }
 
-  // TEST 14: Client Onboarding URL Format (https://niagapos.syncrozz.com/{slug})
+  // TEST 14: Platform-Aware Client Access URL Verification (SES v4.5 Phase B)
+  // 14A: Restaurant Official Domain -> https://kedaimakan.syncrozz.com/{slug}
   {
-    const generatedUrl = WorkspaceService.getClientAccessUrl('kedai-pak-ali');
-    const expected = 'https://niagapos.syncrozz.com/kedai-pak-ali';
-    const isExactMatch = generatedUrl === expected;
+    const restaurantWs: Workspace = {
+      workspaceId: 'ws_kedai_pak_ali',
+      workspaceSlug: 'kedai-pak-ali',
+      workspaceName: 'Kedai Makan Pak Ali',
+      ownerName: 'Pak Ali',
+      ownerEmail: 'pakali@kedaimakan.my',
+      status: 'ACTIVE',
+      platform: 'RESTAURANT',
+      trialDurationDays: 30,
+      trialStartedAt: new Date().toISOString(),
+      trialExpiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
+      gracePeriodDays: 7,
+      gracePeriodEndsAt: new Date(Date.now() + 37 * 86400000).toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const restoUrl = WorkspaceService.getClientAccessUrl(restaurantWs);
+    const expectedResto = 'https://kedaimakan.syncrozz.com/kedai-pak-ali';
+    const isRestoMatch = restoUrl === expectedResto;
+
     results.push({
       testId: 'SEC-14',
-      title: 'Client Access URL Verification: Matches official domain https://niagapos.syncrozz.com/{slug}',
-      passed: isExactMatch,
-      details: isExactMatch ? `Exact URL match: ${generatedUrl}` : `MISMATCH: Got ${generatedUrl}`,
+      title: 'Restaurant Access URL: Matches official domain https://kedaimakan.syncrozz.com/{slug}',
+      passed: isRestoMatch,
+      details: isRestoMatch ? `Exact URL match: ${restoUrl}` : `MISMATCH: Got ${restoUrl}, expected ${expectedResto}`,
+    });
+  }
+
+  // 14B: Retail Official Domain -> https://niagapos.syncrozz.com/{slug}
+  {
+    const retailWs: Workspace = {
+      workspaceId: 'ws_pasar_mini_berkat',
+      workspaceSlug: 'pasar-mini-berkat',
+      workspaceName: 'Pasar Mini Berkat',
+      ownerName: 'Haji Berkat',
+      ownerEmail: 'berkat@mart.my',
+      status: 'ACTIVE',
+      platform: 'RETAIL',
+      trialDurationDays: 30,
+      trialStartedAt: new Date().toISOString(),
+      trialExpiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
+      gracePeriodDays: 7,
+      gracePeriodEndsAt: new Date(Date.now() + 37 * 86400000).toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const retailUrl = WorkspaceService.getClientAccessUrl(retailWs);
+    const expectedRetail = 'https://niagapos.syncrozz.com/pasar-mini-berkat';
+    const isRetailMatch = retailUrl === expectedRetail;
+
+    results.push({
+      testId: 'SEC-14B',
+      title: 'Retail Access URL: Matches official domain https://niagapos.syncrozz.com/{slug}',
+      passed: isRetailMatch,
+      details: isRetailMatch ? `Exact URL match: ${retailUrl}` : `MISMATCH: Got ${retailUrl}, expected ${expectedRetail}`,
+    });
+  }
+
+  // 14C: Restaurant Legacy Domain -> https://niagapos.syncrozz.com/{slug}
+  {
+    const restaurantWs: Workspace = {
+      workspaceId: 'ws_kedai_pak_ali',
+      workspaceSlug: 'kedai-pak-ali',
+      workspaceName: 'Kedai Makan Pak Ali',
+      ownerName: 'Pak Ali',
+      ownerEmail: 'pakali@kedaimakan.my',
+      status: 'ACTIVE',
+      platform: 'RESTAURANT',
+      trialDurationDays: 30,
+      trialStartedAt: new Date().toISOString(),
+      trialExpiresAt: new Date(Date.now() + 30 * 86400000).toISOString(),
+      gracePeriodDays: 7,
+      gracePeriodEndsAt: new Date(Date.now() + 37 * 86400000).toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const legacyUrl = WorkspaceService.getClientAccessUrl(restaurantWs, { legacy: true });
+    const expectedLegacy = 'https://niagapos.syncrozz.com/kedai-pak-ali';
+    const isLegacyMatch = legacyUrl === expectedLegacy;
+
+    results.push({
+      testId: 'SEC-14C',
+      title: 'Restaurant Legacy Access URL: Matches backward-compatible domain https://niagapos.syncrozz.com/{slug}',
+      passed: isLegacyMatch,
+      details: isLegacyMatch ? `Exact URL match: ${legacyUrl}` : `MISMATCH: Got ${legacyUrl}, expected ${expectedLegacy}`,
+    });
+  }
+
+  // 14D: Unclassified raw string does not guess platform
+  {
+    const unclassifiedUrl = WorkspaceService.getClientAccessUrl('unclassified-random-store-xyz');
+    const isSafeNoGuess = unclassifiedUrl === '';
+
+    results.push({
+      testId: 'SEC-14D',
+      title: 'Zero-Heuristic Raw String: Unclassified slug does not silently default or guess',
+      passed: isSafeNoGuess,
+      details: isSafeNoGuess ? 'Protected: Empty string returned without guessing' : `LEAK: Guessed ${unclassifiedUrl}`,
     });
   }
 

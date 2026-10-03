@@ -26,7 +26,6 @@ import {
 } from '../types/workspace';
 import { isValidSlug } from './urlRouter';
 import { FirebaseService, OperationType } from './firebaseService';
-import { TemplateService } from './templateService';
 import { doc, setDoc, getDoc, getDocs, collection, query, where, writeBatch, deleteDoc } from 'firebase/firestore';
 
 const WORKSPACES_LOCAL_KEY = 'niagapos_workspaces_v1';
@@ -34,7 +33,6 @@ const WORKSPACE_MEMBERS_LOCAL_KEY = 'niagapos_workspace_members_v1';
 const DEFAULT_GRACE_PERIOD_DAYS = 7;
 export const RETAIL_PRODUCTION_DOMAIN = 'https://niagapos.syncrozz.com';
 export const RESTAURANT_PRODUCTION_DOMAIN = 'https://kedaimakan.syncrozz.com';
-export const PRODUCTION_DOMAIN = RETAIL_PRODUCTION_DOMAIN;
 
 export const SUBSCRIPTION_PRICING = {
   MONTHLY: {
@@ -126,21 +124,18 @@ export class WorkspaceService {
 
   /**
    * Authoritative platform normalization (SES v4.5):
-   * 1. If ws.platform is explicitly RESTAURANT or RETAIL, preserve it.
-   * 2. If existing authoritative restaurant configuration exists, classify as RESTAURANT.
-   * 3. Otherwise default to RETAIL.
+   * 1. If ws.platform is explicitly RESTAURANT or RETAIL, preserve it exactly.
+   * 2. If platform is missing, null, or undefined: mark as 'UNCLASSIFIED'.
    * 
-   * Strict Rule: Zero slug/name/email heuristics.
+   * Strict Rule: Zero slug/name/email heuristics. Never silently default to RETAIL.
    */
   public static normalizeWorkspacePlatform(ws: Workspace): Workspace {
     if (!ws) return ws;
     if (ws.platform === 'RESTAURANT' || ws.platform === 'RETAIL') {
       return ws;
     }
-    if (TemplateService.hasAuthoritativeRestaurantConfig(ws.workspaceSlug)) {
-      return { ...ws, platform: 'RESTAURANT' };
-    }
-    return { ...ws, platform: 'RETAIL' };
+    // Existing workspaces with missing or unknown platform: mark as UNCLASSIFIED
+    return { ...ws, platform: 'UNCLASSIFIED' };
   }
 
   /**
@@ -150,6 +145,8 @@ export class WorkspaceService {
    * LEGACY     → https://niagapos.syncrozz.com/{workspaceSlug} (when legacy: true)
    * 
    * Strict rule: Zero slug heuristics (no name/substring/email inference).
+   * If a raw string cannot resolve to a Workspace with an explicit platform:
+   * DO NOT GUESS.
    */
   public static getClientAccessUrl(
     workspaceOrSlug: Workspace | string,
@@ -160,13 +157,24 @@ export class WorkspaceService {
 
     if (typeof workspaceOrSlug === 'string') {
       slug = workspaceOrSlug.trim().toLowerCase();
-      ws = this.getWorkspaceBySlug(slug);
+      // Look up workspace in registered local store to see if an explicit platform is established
+      const found = this.getWorkspaceBySlug(slug);
+      if (found && (found.platform === 'RESTAURANT' || found.platform === 'RETAIL')) {
+        ws = found;
+      } else {
+        // Raw slug cannot resolve to a Workspace with an explicit platform.
+        // DO NOT GUESS.
+        if (options?.legacy && slug) {
+          return `${RETAIL_PRODUCTION_DOMAIN}/${slug}`;
+        }
+        return '';
+      }
     } else if (workspaceOrSlug && typeof workspaceOrSlug === 'object') {
       ws = this.normalizeWorkspacePlatform(workspaceOrSlug);
       slug = (ws.workspaceSlug || '').trim().toLowerCase();
     }
 
-    if (!slug) return RETAIL_PRODUCTION_DOMAIN;
+    if (!slug) return '';
 
     // Legacy override: always returns niagapos.syncrozz.com/{slug}
     if (options?.legacy) {
@@ -178,8 +186,115 @@ export class WorkspaceService {
       return `${RESTAURANT_PRODUCTION_DOMAIN}/${slug}`;
     }
 
-    // Default to Retail / NiagaPOS domain (no slug heuristics)
-    return `${RETAIL_PRODUCTION_DOMAIN}/${slug}`;
+    if (platform === 'RETAIL') {
+      return `${RETAIL_PRODUCTION_DOMAIN}/${slug}`;
+    }
+
+    // Platform is missing or UNCLASSIFIED: DO NOT GUESS.
+    return '';
+  }
+
+  /**
+   * Safe, explicit Master Admin classification action:
+   * Explicitly sets workspace platform to RESTAURANT or RETAIL and persists
+   * to both Firestore and local isolated store.
+   */
+  public static async classifyWorkspacePlatformAsync(
+    workspaceIdOrSlug: string,
+    platform: 'RESTAURANT' | 'RETAIL'
+  ): Promise<{ success: boolean; error?: string; workspace?: Workspace }> {
+    const clean = (workspaceIdOrSlug || '').trim();
+    if (!clean) {
+      return { success: false, error: 'ID atau Slug workspace diperlukan.' };
+    }
+
+    if (platform !== 'RESTAURANT' && platform !== 'RETAIL') {
+      return { success: false, error: 'Platform mesti RESTAURANT atau RETAIL.' };
+    }
+
+    const all = this.getAllWorkspacesLocal();
+    const idx = all.findIndex(
+      (w) =>
+        w.workspaceId === clean ||
+        w.workspaceSlug.toLowerCase() === clean.toLowerCase()
+    );
+
+    let targetWs: Workspace;
+    const now = new Date().toISOString();
+
+    if (idx >= 0) {
+      all[idx] = {
+        ...all[idx],
+        platform,
+        updatedAt: now,
+      };
+      targetWs = all[idx];
+      this.saveWorkspacesLocal(all);
+    } else {
+      const db = FirebaseService.getDb();
+      if (db) {
+        try {
+          const docSnap = await getDoc(doc(db, 'workspaces', clean));
+          if (docSnap.exists()) {
+            targetWs = {
+              ...(docSnap.data() as Workspace),
+              platform,
+              updatedAt: now,
+            };
+            this.upsertLocalWorkspace(targetWs);
+          } else {
+            return { success: false, error: 'Workspace tidak dijumpai.' };
+          }
+        } catch (e: any) {
+          return { success: false, error: e?.message || 'Ralat mengakses Firestore.' };
+        }
+      } else {
+        return { success: false, error: 'Workspace tidak dijumpai.' };
+      }
+    }
+
+    // Persist to Cloud Firestore if connected
+    const db = FirebaseService.getDb();
+    if (db) {
+      try {
+        const wsRef = doc(db, 'workspaces', targetWs.workspaceId);
+        await setDoc(wsRef, this.sanitize({
+          platform,
+          updatedAt: now,
+        }), { merge: true });
+      } catch (err: any) {
+        console.warn('[WorkspaceService] Firestore classifyWorkspacePlatformAsync warning:', err);
+      }
+    }
+
+    return { success: true, workspace: targetWs };
+  }
+
+  public static classifyWorkspacePlatform(
+    workspaceIdOrSlug: string,
+    platform: 'RESTAURANT' | 'RETAIL'
+  ): { success: boolean; error?: string; workspace?: Workspace } {
+    const clean = (workspaceIdOrSlug || '').trim();
+    if (!clean) {
+      return { success: false, error: 'ID atau Slug workspace diperlukan.' };
+    }
+    const all = this.getAllWorkspacesLocal();
+    const idx = all.findIndex(
+      (w) =>
+        w.workspaceId === clean ||
+        w.workspaceSlug.toLowerCase() === clean.toLowerCase()
+    );
+    if (idx < 0) {
+      return { success: false, error: 'Workspace tidak dijumpai.' };
+    }
+    const now = new Date().toISOString();
+    all[idx] = {
+      ...all[idx],
+      platform,
+      updatedAt: now,
+    };
+    this.saveWorkspacesLocal(all);
+    return { success: true, workspace: all[idx] };
   }
 
   /**
@@ -567,17 +682,19 @@ export class WorkspaceService {
     this.saveWorkspaceMembersLocal(workspaceId, [ownerMember]);
 
     // 5. Initialize Client PIN Authentication with Default PIN: 1234
-    try {
-      fetch('/api/auth/client/init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workspaceId,
-          workspaceSlug: cleanSlug,
-          customPin: '1234',
-        }),
-      }).catch((e) => console.warn('[WorkspaceService] Server PIN init async notice:', e));
-    } catch {}
+    if (typeof window !== 'undefined') {
+      try {
+        fetch('/api/auth/client/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workspaceId,
+            workspaceSlug: cleanSlug,
+            customPin: '1234',
+          }),
+        }).catch((e) => console.warn('[WorkspaceService] Server PIN init async notice:', e));
+      } catch {}
+    }
 
     const accessUrl = this.getClientAccessUrl(newWorkspace);
 

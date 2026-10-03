@@ -32,7 +32,7 @@ export interface WorkspaceAuthConfigData {
 
 export type WorkspaceType = 'CLIENT' | 'DEMO';
 
-export type WorkspacePlatform = 'RESTAURANT' | 'RETAIL';
+export type WorkspacePlatform = 'RESTAURANT' | 'RETAIL' | 'UNCLASSIFIED';
 
 export type SubscriptionPlan = 'TRIAL' | 'MONTHLY' | 'ANNUAL';
 

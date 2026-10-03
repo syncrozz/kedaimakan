@@ -136,10 +136,34 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
 
   const handleCopyUrl = (ws: Workspace | string, legacy: boolean = false) => {
     const url = WorkspaceService.getClientAccessUrl(ws, { legacy });
+    if (!url) {
+      setStatusMessage({ text: 'Platform belum ditetapkan. Sila tetapkan platform terlebih dahulu.', type: 'error' });
+      setTimeout(() => setStatusMessage(null), 3000);
+      return;
+    }
     navigator.clipboard.writeText(url);
     const slug = typeof ws === 'string' ? ws : ws.workspaceSlug;
     setCopiedSlug(legacy ? `${slug}-legacy` : slug);
     setTimeout(() => setCopiedSlug(null), 2000);
+  };
+
+  const handleClassifyPlatform = async (ws: Workspace, platform: 'RESTAURANT' | 'RETAIL') => {
+    const platformLabel = platform === 'RESTAURANT' ? 'KEDAI MAKAN (Restoran)' : 'NIAGAPOS (Runcit)';
+    try {
+      const res = await WorkspaceService.classifyWorkspacePlatformAsync(ws.workspaceId, platform);
+      if (res.success) {
+        setStatusMessage({
+          text: `Platform "${ws.workspaceName}" berjaya ditetapkan ke ${platformLabel}.`,
+          type: 'success',
+        });
+        await loadWorkspaces();
+      } else {
+        setStatusMessage({ text: res.error || 'Gagal menetapkan platform.', type: 'error' });
+      }
+    } catch (err: any) {
+      setStatusMessage({ text: err?.message || 'Ralat menetapkan platform.', type: 'error' });
+    }
+    setTimeout(() => setStatusMessage(null), 3500);
   };
 
   const handleExtendTrial = async (wsId: string, days: number = 30) => {
@@ -645,79 +669,127 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
 
                         {/* Access URL */}
                         <td className="px-5 py-3.5">
-                          <div className="space-y-1.5">
-                            {/* Official Access Link */}
-                            <div>
-                              <div className="flex items-center gap-1 mb-0.5">
-                                <span className={`text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded ${
-                                  isRestaurant
-                                    ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60'
-                                    : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'
-                                }`}>
-                                  {isRestaurant ? 'Rasmi • Restoran' : 'Rasmi • Runcit'}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-mono text-[11px] text-stone-200 truncate max-w-[210px]" title={accessUrl}>
-                                  {accessUrl}
-                                </span>
-                                <button
-                                  onClick={() => handleCopyUrl(ws, false)}
-                                  className="p-1 rounded hover:bg-stone-800 text-stone-400 hover:text-white transition-colors cursor-pointer"
-                                  title="Salin Pautan Rasmi"
-                                >
-                                  {copiedSlug === ws.workspaceSlug ? (
-                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                                  ) : (
-                                    <Copy className="w-3.5 h-3.5" />
-                                  )}
-                                </button>
-                                <a
-                                  href={accessUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="p-1 rounded hover:bg-stone-800 text-stone-400 hover:text-white transition-colors"
-                                  title="Buka Pautan Rasmi"
-                                >
-                                  <ExternalLink className="w-3.5 h-3.5" />
-                                </a>
-                              </div>
-                            </div>
-
-                            {/* Legacy Compatible Link for Restaurant Workspaces */}
-                            {isRestaurant && (
-                              <div className="pt-1 border-t border-stone-800/60">
-                                <div className="flex items-center gap-1 mb-0.5">
-                                  <span className="text-[8px] uppercase tracking-wider px-1 py-0.2 rounded bg-stone-900 border border-stone-800 text-stone-400">
-                                    Legasi • NiagaPOS
+                          <div className="space-y-2">
+                            {/* When platform is unclassified */}
+                            {(!ws.platform || ws.platform === 'UNCLASSIFIED') ? (
+                              <div className="p-2.5 rounded-xl bg-amber-950/40 border border-amber-600/50 space-y-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 inline-flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3 text-amber-400" />
+                                    <span>PLATFORM BELUM DITETAPKAN</span>
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-1.5 text-stone-400">
-                                  <span className="font-mono text-[10px] text-stone-400 truncate max-w-[190px]" title={legacyUrl}>
-                                    {legacyUrl}
-                                  </span>
+                                <p className="text-[11px] text-stone-400 leading-tight">
+                                  Pilih platform untuk menjana pautan rasmi:
+                                </p>
+                                <div className="flex items-center gap-1.5 pt-0.5">
                                   <button
-                                    onClick={() => handleCopyUrl(ws, true)}
-                                    className="p-0.5 rounded hover:bg-stone-800 text-stone-500 hover:text-stone-300 transition-colors cursor-pointer"
-                                    title="Salin Pautan Legasi"
+                                    type="button"
+                                    onClick={() => handleClassifyPlatform(ws, 'RESTAURANT')}
+                                    className="px-2.5 py-1 bg-rose-900/60 hover:bg-rose-800 text-rose-200 border border-rose-700/60 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                                    title="Tetapkan sebagai KEDAI MAKAN (Restoran)"
                                   >
-                                    {copiedSlug === `${ws.workspaceSlug}-legacy` ? (
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                    ) : (
-                                      <Copy className="w-3 h-3" />
-                                    )}
+                                    <span>🍽️</span>
+                                    <span>KEDAI MAKAN</span>
                                   </button>
-                                  <a
-                                    href={legacyUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="p-0.5 rounded hover:bg-stone-800 text-stone-500 hover:text-stone-300 transition-colors"
-                                    title="Buka Pautan Legasi"
+                                  <button
+                                    type="button"
+                                    onClick={() => handleClassifyPlatform(ws, 'RETAIL')}
+                                    className="px-2.5 py-1 bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 border border-emerald-700/60 rounded-lg text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+                                    title="Tetapkan sebagai NIAGAPOS RUNCIT"
                                   >
-                                    <ExternalLink className="w-3 h-3" />
-                                  </a>
+                                    <span>🛒</span>
+                                    <span>NIAGAPOS RUNCIT</span>
+                                  </button>
                                 </div>
                               </div>
+                            ) : (
+                              <>
+                                {/* Official Access Link */}
+                                <div>
+                                  <div className="flex items-center justify-between gap-1 mb-1">
+                                    <span className={`text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded flex items-center gap-1 ${
+                                      isRestaurant
+                                        ? 'bg-rose-950/80 text-rose-300 border border-rose-800/60'
+                                        : 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'
+                                    }`}>
+                                      <span>{isRestaurant ? '🍽️' : '🛒'}</span>
+                                      <span>{isRestaurant ? 'KEDAI MAKAN' : 'NIAGAPOS RUNCIT'}</span>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleClassifyPlatform(ws, isRestaurant ? 'RETAIL' : 'RESTAURANT')}
+                                      className="text-[9px] text-stone-500 hover:text-stone-300 transition-colors underline cursor-pointer"
+                                      title={`Tukar platform ke ${isRestaurant ? 'NIAGAPOS RUNCIT' : 'KEDAI MAKAN'}`}
+                                    >
+                                      Tukar Platform
+                                    </button>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono text-[11px] text-stone-200 truncate max-w-[210px]" title={accessUrl}>
+                                      {accessUrl}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyUrl(ws, false)}
+                                      className="p-1 rounded hover:bg-stone-800 text-stone-400 hover:text-white transition-colors cursor-pointer"
+                                      title="Salin Pautan Rasmi"
+                                    >
+                                      {copiedSlug === ws.workspaceSlug ? (
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                      ) : (
+                                        <Copy className="w-3.5 h-3.5" />
+                                      )}
+                                    </button>
+                                    <a
+                                      href={accessUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="p-1 rounded hover:bg-stone-800 text-stone-400 hover:text-white transition-colors"
+                                      title="Buka Pautan Rasmi"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                    </a>
+                                  </div>
+                                </div>
+
+                                {/* Legacy Compatible Link for Restaurant Workspaces */}
+                                {isRestaurant && (
+                                  <div className="pt-1.5 border-t border-stone-800/60">
+                                    <div className="flex items-center gap-1 mb-0.5">
+                                      <span className="text-[8px] uppercase tracking-wider px-1.5 py-0.2 rounded bg-stone-900 border border-stone-800 text-stone-400">
+                                        Legasi • NiagaPOS
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-stone-400">
+                                      <span className="font-mono text-[10px] text-stone-400 truncate max-w-[190px]" title={legacyUrl}>
+                                        {legacyUrl}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCopyUrl(ws, true)}
+                                        className="p-0.5 rounded hover:bg-stone-800 text-stone-500 hover:text-stone-300 transition-colors cursor-pointer"
+                                        title="Salin Pautan Legasi"
+                                      >
+                                        {copiedSlug === `${ws.workspaceSlug}-legacy` ? (
+                                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                        ) : (
+                                          <Copy className="w-3 h-3" />
+                                        )}
+                                      </button>
+                                      <a
+                                        href={legacyUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="p-0.5 rounded hover:bg-stone-800 text-stone-500 hover:text-stone-300 transition-colors"
+                                        title="Buka Pautan Legasi"
+                                      >
+                                        <ExternalLink className="w-3 h-3" />
+                                      </a>
+                                    </div>
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
                         </td>
