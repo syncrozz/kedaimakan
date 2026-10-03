@@ -13,7 +13,7 @@ import type { KitchenAuthSession, AuthResponse } from '../types/auth';
 
 const KITCHEN_SESSION_PREFIX = 'niagapos_kitchen_session_';
 const KITCHEN_LOCKOUT_PREFIX = 'niagapos_kitchen_lockout_';
-const DEFAULT_KITCHEN_PIN = '9999';
+const DEFAULT_KITCHEN_PIN = '8888';
 
 type KitchenSessionListener = (session: KitchenAuthSession | null) => void;
 const listeners: Set<KitchenSessionListener> = new Set();
@@ -219,8 +219,8 @@ export class KitchenAuthService {
     }
 
     // OFFLINE / STATIC HOSTING FALLBACK:
-    // Accept default kitchen PIN 9999 or master override 5313
-    const isDefault = cleanPin === DEFAULT_KITCHEN_PIN;
+    // Accept default kitchen PIN 8888 (or legacy 9999) or master override 5313
+    const isDefault = cleanPin === DEFAULT_KITCHEN_PIN || cleanPin === '9999';
     const isValidOffline = isDefault || cleanPin === '5313';
 
     if (!isValidOffline) {

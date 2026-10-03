@@ -242,7 +242,7 @@ export const KitchenPinLoginModal: React.FC<KitchenPinLoginModalProps> = ({
           </button>
 
           <span className="text-[10px] text-stone-500">
-            PIN Lalai: <strong className="text-stone-400 font-mono">9999</strong> (atau 8888)
+            PIN Lalai: <strong className="text-amber-400 font-mono">8888</strong>
           </span>
         </div>
       </div>

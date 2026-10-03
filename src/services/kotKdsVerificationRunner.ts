@@ -77,9 +77,9 @@ export class KotKdsVerificationRunner {
       results.push({
         id: 'VG-SEC-02',
         category: 'SECURITY',
-        name: 'Default PIN 9999 Warning Banner & Change Workflow',
+        name: 'Default PIN 8888 Warning Banner & Change Workflow',
         passed: hasWarning,
-        expected: 'Amaran keselamatan dipaparkan jika menggunakan PIN lalai 9999 dan butang tukar PIN disediakan untuk Owner',
+        expected: 'Amaran keselamatan dipaparkan jika menggunakan PIN lalai 8888 dan butang tukar PIN disediakan untuk Owner',
         actual: `isDefaultPin flag disahkan (${dummyDefaultSession.isDefaultPin}). Banner amaran aktif di KDS & SettingsPage.`,
         evidence: `KitchenDisplayView.tsx memaparkan #kds-default-pin-warning-banner dan SettingsPage memaparkan kad keselamatan PIN Dapur bersama ChangeKitchenPinModal.`,
       });
@@ -87,7 +87,7 @@ export class KotKdsVerificationRunner {
       results.push({
         id: 'VG-SEC-02',
         category: 'SECURITY',
-        name: 'Default PIN 9999 Warning Banner & Change Workflow',
+        name: 'Default PIN 8888 Warning Banner & Change Workflow',
         passed: false,
         expected: 'Amaran keselamatan dipaparkan',
         actual: `Ralat: ${e?.message}`,

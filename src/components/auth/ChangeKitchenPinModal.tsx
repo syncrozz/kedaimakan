@@ -41,7 +41,7 @@ export const ChangeKitchenPinModal: React.FC<ChangeKitchenPinModalProps> = ({
     setError(null);
 
     if (!currentPin || currentPin.length < 4) {
-      setError('Sila masukkan PIN semasa (atau PIN Pemilik / PIN Lalai 9999).');
+      setError('Sila masukkan PIN semasa (atau PIN Pemilik / PIN Lalai 8888).');
       return;
     }
 
@@ -143,7 +143,7 @@ export const ChangeKitchenPinModal: React.FC<ChangeKitchenPinModalProps> = ({
 
           <div className="space-y-1">
             <label className="block font-medium text-stone-300">
-              PIN Semasa / PIN Pemilik / PIN Lalai (9999)
+              PIN Semasa / PIN Pemilik / PIN Lalai (8888)
             </label>
             <div className="relative">
               <input
@@ -154,7 +154,7 @@ export const ChangeKitchenPinModal: React.FC<ChangeKitchenPinModalProps> = ({
                 maxLength={6}
                 value={currentPin}
                 onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ''))}
-                placeholder="cth. 9999 atau PIN Pemilik"
+                placeholder="cth. 8888 atau PIN Pemilik"
                 disabled={loading || !!successMessage}
                 className="w-full pl-9 pr-10 py-2.5 bg-stone-950 border border-stone-800 rounded-xl text-white font-mono text-sm focus:outline-none focus:border-amber-500"
                 required
@@ -163,7 +163,7 @@ export const ChangeKitchenPinModal: React.FC<ChangeKitchenPinModalProps> = ({
               <KeyRound className="w-4 h-4 text-stone-500 absolute left-3 top-3" />
             </div>
             <p className="text-[11px] text-stone-500">
-              Boleh disahkan menggunakan PIN Dapur semasa, PIN Pemilik kedai, atau PIN Lalai (9999/8888).
+              Boleh disahkan menggunakan PIN Dapur semasa, PIN Pemilik kedai, atau PIN Lalai (8888).
             </p>
           </div>
 

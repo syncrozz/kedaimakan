@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   LayoutDashboard,
   Package,
@@ -18,6 +18,8 @@ import {
   CloudOff,
   RefreshCw,
   ChevronRight,
+  ChevronDown,
+  MoreHorizontal,
   Lock,
   KeyRound,
   LogOut,
@@ -59,9 +61,25 @@ export const AppShell: React.FC<AppShellProps> = ({
     pullAllFromCloud,
   } = useStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [syncToast, setSyncToast] = useState<string | null>(null);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreMenuOpen(false);
+      }
+    };
+    if (moreMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [moreMenuOpen]);
 
   const handleHeaderSync = async () => {
     setIsManualSyncing(true);
@@ -90,6 +108,24 @@ export const AppShell: React.FC<AppShellProps> = ({
     { id: 'reports', label: 'Reports', icon: BarChart3 },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
+
+  const primaryNavItems = [
+    { id: 'pos' as const, label: 'POS', icon: ShoppingCart },
+    { id: 'kds' as const, label: 'Dapur', icon: ChefHat },
+    { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'products' as const, label: 'Produk', icon: Package },
+    { id: 'inventory' as const, label: 'Inventori', icon: Boxes },
+  ];
+
+  const secondaryNavItems = [
+    { id: 'purchases' as const, label: 'Belian (Purchases)', shortLabel: 'Belian', icon: Truck },
+    { id: 'suppliers' as const, label: 'Pembekal (Suppliers)', shortLabel: 'Pembekal', icon: Building2 },
+    { id: 'customers' as const, label: 'Pelanggan (Customers)', shortLabel: 'Pelanggan', icon: Users },
+    { id: 'reports' as const, label: 'Laporan (Reports)', shortLabel: 'Laporan', icon: BarChart3 },
+  ];
+
+  const isSecondaryActive = secondaryNavItems.some((item) => item.id === activePage);
+  const activeSecondaryItem = secondaryNavItems.find((item) => item.id === activePage);
 
   const handleNavClick = (page: ActivePage) => {
     onNavigate(page);
@@ -191,37 +227,124 @@ export const AppShell: React.FC<AppShellProps> = ({
             </div>
 
             {/* Desktop Navigation Links */}
-            <nav className="hidden md:flex items-center gap-0.5 lg:gap-1">
-              {navItems.map((item) => {
+            <nav className="hidden md:flex items-center bg-stone-100/90 border border-stone-200/90 p-1 rounded-xl gap-0.5 shadow-2xs backdrop-blur-xs">
+              {primaryNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = activePage === item.id;
-                const isSettings = item.id === 'settings';
-                const hideIcon = ['dashboard', 'products', 'inventory', 'purchases', 'suppliers', 'customers', 'reports'].includes(item.id);
+                const isPos = item.id === 'pos';
+                const isKds = item.id === 'kds';
+
                 return (
                   <button
                     key={item.id}
                     id={`nav-item-${item.id}`}
                     type="button"
                     onClick={() => handleNavClick(item.id)}
-                    title={isSettings ? 'Tetapan (Settings)' : item.label}
-                    aria-label={item.label}
-                    className={`flex items-center justify-center rounded-lg text-xs lg:text-sm transition-all ${
-                      isSettings
-                        ? 'p-2'
-                        : hideIcon
-                        ? 'px-2 lg:px-2.5 py-1.5'
-                        : 'gap-1.5 px-2.5 py-1.5'
-                    } ${
+                    title={item.label}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs lg:text-[13px] transition-all cursor-pointer select-none ${
                       isActive
-                        ? 'bg-emerald-600 text-white shadow-xs font-semibold'
-                        : 'text-stone-600 hover:text-emerald-800 hover:bg-emerald-50/70 font-medium'
+                        ? isPos
+                          ? 'bg-emerald-600 text-white shadow-xs font-semibold'
+                          : isKds
+                          ? 'bg-amber-600 text-white shadow-xs font-semibold'
+                          : 'bg-emerald-600 text-white shadow-xs font-semibold'
+                        : 'text-stone-600 hover:text-stone-900 hover:bg-white/80 font-medium'
                     }`}
                   >
-                    {!hideIcon && <Icon className="w-3.5 h-3.5 lg:w-4 lg:h-4" />}
-                    {!isSettings && <span>{item.label}</span>}
+                    <Icon className="w-3.5 h-3.5 lg:w-4 lg:h-4 shrink-0" />
+                    <span>{item.label}</span>
                   </button>
                 );
               })}
+
+              {/* Dropdown Menu "Lagi / Pengurusan" */}
+              <div className="relative" ref={moreMenuRef}>
+                <button
+                  type="button"
+                  id="nav-item-more-dropdown"
+                  onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs lg:text-[13px] transition-all cursor-pointer select-none ${
+                    isSecondaryActive
+                      ? 'bg-emerald-600 text-white shadow-xs font-semibold'
+                      : moreMenuOpen
+                      ? 'bg-white text-stone-900 shadow-2xs font-medium'
+                      : 'text-stone-600 hover:text-stone-900 hover:bg-white/80 font-medium'
+                  }`}
+                  aria-expanded={moreMenuOpen}
+                  title="Menu Pengurusan & Analitik"
+                >
+                  {isSecondaryActive && activeSecondaryItem ? (
+                    <>
+                      <activeSecondaryItem.icon className="w-3.5 h-3.5 lg:w-4 lg:h-4 shrink-0" />
+                      <span>{activeSecondaryItem.shortLabel}</span>
+                    </>
+                  ) : (
+                    <>
+                      <MoreHorizontal className="w-3.5 h-3.5 lg:w-4 lg:h-4 shrink-0" />
+                      <span>Lagi</span>
+                    </>
+                  )}
+                  <ChevronDown
+                    className={`w-3 h-3 transition-transform duration-150 ${moreMenuOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {/* Floating Dropdown Panel */}
+                {moreMenuOpen && (
+                  <div className="absolute top-full left-0 mt-1.5 w-52 bg-white border border-stone-200 rounded-xl shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="px-3 py-1.5 text-[10px] font-bold text-stone-400 uppercase tracking-wider border-b border-stone-100 mb-1">
+                      Pengurusan &amp; Analitik
+                    </div>
+                    {secondaryNavItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = activePage === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          id={`nav-item-${item.id}`}
+                          type="button"
+                          onClick={() => {
+                            handleNavClick(item.id);
+                            setMoreMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 text-xs transition cursor-pointer text-left ${
+                            isActive
+                              ? 'bg-emerald-50 text-emerald-800 font-semibold'
+                              : 'text-stone-700 hover:bg-stone-50 hover:text-stone-900'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-600' : 'text-stone-500'}`} />
+                            <span>{item.label}</span>
+                          </div>
+                          {isActive && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Subtle Divider */}
+              <div className="w-px h-4 bg-stone-300/80 mx-0.5" />
+
+              {/* Settings Action Icon Button */}
+              <button
+                id="nav-item-settings"
+                type="button"
+                onClick={() => handleNavClick('settings')}
+                title="Tetapan Sistem (Settings)"
+                aria-label="Settings"
+                className={`flex items-center justify-center p-1.5 lg:p-2 rounded-lg text-xs transition-all cursor-pointer ${
+                  activePage === 'settings'
+                    ? 'bg-emerald-600 text-white shadow-xs font-semibold'
+                    : 'text-stone-600 hover:text-stone-900 hover:bg-white/80 font-medium'
+                }`}
+              >
+                <Settings className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+              </button>
             </nav>
 
             {/* Right Side: [ System/Status Indicator ] [ Akses Mod Admin ] [ ADMIN (Owner) ▼ ] */}

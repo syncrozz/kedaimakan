@@ -460,7 +460,7 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
           <div className="flex items-center gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
             <span>
-              <strong>Perhatian Keselamatan PIN Dapur:</strong> Akses Dapur sedang menggunakan PIN Lalai (9999/8888). Sila tukar PIN Dapur untuk menjamin privasi operasi kedai anda.
+              <strong>PIN Lalai (8888):</strong> Sila tukar PIN Dapur demi keselamatan operasi kedai.
             </span>
           </div>
           <button

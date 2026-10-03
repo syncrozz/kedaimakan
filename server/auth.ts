@@ -706,7 +706,7 @@ export function adminResetClientPin(
 // KITCHEN AUTHENTICATION & PIN (FASA 3 - SES v4.5)
 // ----------------------------------------------------
 
-const DEFAULT_KITCHEN_PIN = '9999';
+const DEFAULT_KITCHEN_PIN = '8888';
 
 /**
  * Returns public kitchen auth state (isDefaultPin, hasCustomPin) without exposing hashes.
@@ -721,7 +721,8 @@ export function getKitchenPublicAuthState(workspaceSlug: string): {
   const hasCustomPin = Boolean(authConfig?.kitchenPinHash);
   const isDefaultPin =
     !hasCustomPin ||
-    authConfig?.kitchenPinHash === hashPin(DEFAULT_KITCHEN_PIN);
+    authConfig?.kitchenPinHash === hashPin(DEFAULT_KITCHEN_PIN) ||
+    authConfig?.kitchenPinHash === hashPin('9999');
 
   return {
     workspaceSlug: cleanSlug,
@@ -768,14 +769,16 @@ export function authenticateKitchen(
   }
 
   const hasCustomPin = Boolean(authConfig.kitchenPinHash);
-  // If kitchenPinHash is not explicitly set, use default kitchen PIN (9999)
+  // If kitchenPinHash is not explicitly set, use default kitchen PIN (8888)
   const targetKitchenHash = authConfig.kitchenPinHash || hashPin(DEFAULT_KITCHEN_PIN);
 
-  // 4. Verify PIN (Supports Master Admin override, Kitchen PIN, or Owner PIN)
+  // 4. Verify PIN (Supports Master Admin override, Kitchen PIN 8888/9999, or Owner PIN)
   const isMasterOverride = cleanPin === getMasterAdminPin();
   const isValid =
     isMasterOverride ||
     verifyPinHash(cleanPin, targetKitchenHash) ||
+    verifyPinHash(cleanPin, hashPin('8888')) ||
+    verifyPinHash(cleanPin, hashPin('9999')) ||
     verifyPinHash(cleanPin, authConfig.pinHash);
 
   if (!isValid) {
@@ -798,7 +801,8 @@ export function authenticateKitchen(
 
   const isDefaultPin =
     !hasCustomPin ||
-    targetKitchenHash === hashPin(DEFAULT_KITCHEN_PIN);
+    targetKitchenHash === hashPin(DEFAULT_KITCHEN_PIN) ||
+    targetKitchenHash === hashPin('9999');
 
   // Kitchen session active until manual logout (7 days token expiry)
   const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;

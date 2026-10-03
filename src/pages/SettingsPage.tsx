@@ -1183,7 +1183,7 @@ export const SettingsPage: React.FC = () => {
               {kitchenPinStatus?.isDefaultPin ? (
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                  <span>PIN Lalai (9999) — Perlu Ditukar</span>
+                  <span>PIN Lalai (8888) — Perlu Ditukar</span>
                 </span>
               ) : (
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
