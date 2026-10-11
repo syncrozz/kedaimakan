@@ -577,53 +577,61 @@ export const PosPage: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">
+      <div className="flex items-center justify-between gap-2.5 sm:gap-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <h1 className="text-lg sm:text-2xl font-bold text-stone-900 tracking-tight truncate">
             {posMode === 'RESTAURANT' ? 'POS Restoran' : 'POS Runcit & Barcode'}
           </h1>
         </div>
 
-        {/* Switcher Antara Mod Restoran & Mod Runcit (Data Lama Kekal Terpelihara) */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Switcher Antara Mod Restoran & Mod Runcit, Cashier & Recent Receipts (Icon Sahaja) */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Switcher Mod: Restoran & POS Runcit (Bersama Kapsyen) */}
           <div className="flex items-center p-1 bg-stone-100 rounded-xl border border-stone-200 shadow-2xs">
             <button
               type="button"
               id="switch-to-restaurant-pos-btn"
               onClick={() => setPosMode('RESTAURANT')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+              title="Mod POS Restoran"
+              aria-label="Mod POS Restoran"
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
                 posMode === 'RESTAURANT'
                   ? 'bg-emerald-700 text-white shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
               }`}
             >
-              <UtensilsCrossed className="w-3.5 h-3.5" />
+              <UtensilsCrossed className="w-3.5 h-3.5 shrink-0" />
               <span>Restoran</span>
             </button>
             <button
               type="button"
               id="switch-to-retail-pos-btn"
               onClick={() => setPosMode('RETAIL')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+              title="Mod POS Runcit & Barcode"
+              aria-label="Mod POS Runcit & Barcode"
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
                 posMode === 'RETAIL'
                   ? 'bg-emerald-700 text-white shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
               }`}
             >
-              <Barcode className="w-3.5 h-3.5" />
+              <Barcode className="w-3.5 h-3.5 shrink-0" />
               <span>POS Runcit</span>
             </button>
           </div>
+
+          {/* Button Cashier (Icon Sahaja) */}
           {store.settings?.enableStaff !== false && activeCashiers.length > 0 ? (
             <div
               id="pos-cashier-container"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-xs text-stone-700 shadow-2xs"
+              title={`Juruwang: ${activeStaff ? activeStaff.name : 'Store Owner'}`}
+              className="relative flex items-center justify-center p-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 shadow-2xs transition group cursor-pointer"
             >
-              <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
-              <span className="text-stone-500">Cashier:</span>
+              <UserCheck className="w-4 h-4 text-emerald-700" />
               <select
                 id="pos-cashier-select"
                 value={selectedCashierValue}
+                aria-label="Pilih Juruwang"
                 onChange={(e) => {
                   const val = e.target.value;
                   if (val === 'store-owner' || !val) {
@@ -637,7 +645,7 @@ export const PosPage: React.FC = () => {
                     }
                   }
                 }}
-                className="bg-transparent font-semibold text-stone-900 border-none focus:outline-none cursor-pointer"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               >
                 <option value="store-owner">Store Owner</option>
                 {activeCashiers.map((s) => (
@@ -650,26 +658,28 @@ export const PosPage: React.FC = () => {
           ) : (
             <div
               id="pos-cashier-container"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-xs text-stone-700 shadow-2xs"
+              title="Juruwang: Store Owner"
+              className="flex items-center justify-center p-2 rounded-xl border border-stone-200 bg-white text-stone-700 shadow-2xs"
             >
-              <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
-              <span className="text-stone-500">Cashier:</span>
-              <span id="pos-cashier-label" className="font-semibold text-stone-900">
+              <UserCheck className="w-4 h-4 text-emerald-700" />
+              <span id="pos-cashier-label" className="sr-only">
                 Store Owner
               </span>
             </div>
           )}
 
+          {/* Button Recent Receipts (Icon Sahaja dengan Badge Bilangan) */}
           <button
             type="button"
             id="recent-receipts-btn"
             onClick={() => setShowRecentSalesModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 text-xs font-semibold text-stone-700 shadow-2xs transition"
+            title={`Resit Terkini (${todaySales.length} transaksi hari ini)`}
+            aria-label="Recent Receipts"
+            className="relative flex items-center justify-center p-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 shadow-2xs transition"
           >
-            <History className="w-3.5 h-3.5 text-stone-500" />
-            <span>Recent Receipts</span>
+            <History className="w-4 h-4 text-stone-600" />
             {todaySales.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.2 rounded-full bg-emerald-700 text-white text-[10px] font-mono font-bold">
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-700 text-white text-[10px] font-mono font-bold flex items-center justify-center shadow-xs ring-2 ring-white">
                 {todaySales.length}
               </span>
             )}

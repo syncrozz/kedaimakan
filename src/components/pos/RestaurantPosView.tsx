@@ -119,10 +119,18 @@ export const RestaurantPosView: React.FC = () => {
     return menuItems.filter((m) => m.active && isDrinkItem(m)).length;
   }, [menuItems]);
 
-  // Restaurant View Tab: 'MENU' | 'TABLES' (SES v4.5 Default Table Grid or Fast Menu)
-  const [activeRestaurantTab, setActiveRestaurantTab] = useState<'TABLES' | 'MENU'>(() => {
-    return businessConfig?.tableMode === 'DISABLED' ? 'MENU' : 'TABLES';
-  });
+  // Jika kategori yang dipilih tiada item (count === 0), kembalikan pilihan kepada 'ALL'
+  useEffect(() => {
+    if (selectedCategory !== 'ALL') {
+      const hasActiveItems = menuItems.some((m) => m.category === selectedCategory && m.active);
+      if (!hasActiveItems) {
+        setSelectedCategory('ALL');
+      }
+    }
+  }, [menuItems, selectedCategory]);
+
+  // Restaurant View Tab: 'MENU' | 'TABLES' (SES v4.5 Default 1st Tab: MENU)
+  const [activeRestaurantTab, setActiveRestaurantTab] = useState<'TABLES' | 'MENU'>('MENU');
 
   // Duplicate Audit & CSV Import states (SES v4.5)
   const [isDuplicateAuditOpen, setIsDuplicateAuditOpen] = useState(false);
@@ -623,6 +631,31 @@ export const RestaurantPosView: React.FC = () => {
         {/* Navigation Mode Switcher & KDS */}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center p-1 bg-stone-950 rounded-xl border border-stone-800">
+            {/* 1st: Menu */}
+            <button
+              type="button"
+              id="restaurant-tab-menu-btn"
+              onClick={() => setActiveRestaurantTab('MENU')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeRestaurantTab === 'MENU'
+                  ? 'bg-purple-600 text-white shadow-sm ring-1 ring-purple-400/40'
+                  : 'text-stone-400 hover:text-stone-200'
+              }`}
+            >
+              <UtensilsCrossed className={`w-3.5 h-3.5 ${activeRestaurantTab === 'MENU' ? 'text-white' : 'text-purple-400'}`} />
+              <span>Menu</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-semibold transition ${
+                  activeRestaurantTab === 'MENU'
+                    ? 'bg-purple-700/80 text-purple-100'
+                    : 'bg-purple-950/80 text-purple-300 border border-purple-700/40'
+                }`}
+              >
+                {menuItems.length}
+              </span>
+            </button>
+
+            {/* 2nd: Meja */}
             <button
               type="button"
               id="restaurant-tab-tables-btn"
@@ -634,32 +667,11 @@ export const RestaurantPosView: React.FC = () => {
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
-              <span>Grid Meja ({tables.length})</span>
-            </button>
-            <button
-              type="button"
-              id="restaurant-tab-menu-btn"
-              onClick={() => setActiveRestaurantTab('MENU')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeRestaurantTab === 'MENU'
-                  ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400/40'
-                  : 'text-stone-200 bg-stone-900/80 hover:bg-stone-800 hover:text-white border border-stone-700/60 shadow-xs'
-              }`}
-            >
-              <UtensilsCrossed className={`w-3.5 h-3.5 ${activeRestaurantTab === 'MENU' ? 'text-white' : 'text-emerald-400'}`} />
-              <span>Menu &amp; Pesanan</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-semibold transition ${
-                  activeRestaurantTab === 'MENU'
-                    ? 'bg-emerald-700/80 text-emerald-100'
-                    : 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/40'
-                }`}
-              >
-                {menuItems.length}
-              </span>
+              <span>Meja ({tables.length})</span>
             </button>
           </div>
 
+          {/* 3rd: Dapur */}
           <button
             type="button"
             id="restaurant-kds-open-btn"
@@ -688,13 +700,13 @@ export const RestaurantPosView: React.FC = () => {
             title="Tetapan &amp; Alat Operasi"
           >
             <Settings className={`w-4 h-4 text-emerald-400 group-hover:rotate-45 transition-transform duration-300 ${isSettingsOpen ? 'rotate-90' : ''}`} />
-            <span>Tetapan {activeRestaurantTab === 'TABLES' ? 'Meja' : 'Menu'}</span>
+            <span>Tetapan</span>
             <ChevronDown className={`w-3.5 h-3.5 text-stone-400 transition-transform duration-200 ${isSettingsOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          {/* Panel Dropdown Tetapan */}
+          {/* Panel Dropdown Tetapan (Responsif Mobile & Desktop) */}
           {isSettingsOpen && (
-            <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-stone-900/95 backdrop-blur-md border border-stone-700/90 rounded-2xl shadow-2xl z-50 p-2 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+            <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-[calc(100vw-2.5rem)] max-w-xs sm:w-80 bg-stone-900/95 backdrop-blur-md border border-stone-700/90 rounded-2xl shadow-2xl z-50 p-2 space-y-1 max-h-[85vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
               <div className="px-3 py-2 border-b border-stone-800 flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
@@ -1042,13 +1054,15 @@ export const RestaurantPosView: React.FC = () => {
               </button>
               {menuCategories
                 .filter((cat) => {
-                  if (selectedSuperCategory === 'FOOD') return !isDrinkCategory(cat);
-                  if (selectedSuperCategory === 'BEVERAGE') return isDrinkCategory(cat);
-                  return true;
+                  if (selectedSuperCategory === 'FOOD' && isDrinkCategory(cat)) return false;
+                  if (selectedSuperCategory === 'BEVERAGE' && !isDrinkCategory(cat)) return false;
+                  // Sembunyikan kategori sekiranya 0 item (tiada sub Menu)
+                  const count = menuItems.filter((m) => m.category === cat && m.active).length;
+                  return count > 0;
                 })
                 .map((cat) => {
                   const isDrink = isDrinkCategory(cat);
-                  const count = menuItems.filter((m) => m.category === cat).length;
+                  const count = menuItems.filter((m) => m.category === cat && m.active).length;
                   return (
                     <button
                       key={cat}

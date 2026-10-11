@@ -66,6 +66,7 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [selectedStation, setSelectedStation] = useState<string>('ALL');
+  const [mobileColumnTab, setMobileColumnTab] = useState<'ALL' | 'NEW' | 'PREPARING' | 'READY'>('ALL');
   const [syncStatus, setSyncStatus] = useState<'CONNECTED' | 'SYNCING' | 'OFFLINE'>('SYNCING');
   const [currentTime, setCurrentTime] = useState(Date.now());
   const containerRef = useRef<HTMLDivElement>(null);
@@ -283,56 +284,53 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
   return (
     <div
       ref={containerRef}
-      className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans select-none overflow-x-hidden"
+      className="min-h-screen h-[100dvh] bg-stone-950 text-stone-100 flex flex-col font-sans select-none overflow-hidden w-full"
     >
-      {/* KDS Header Bar */}
-      <header className="h-16 px-4 sm:px-6 bg-stone-900 border-b border-stone-800 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <ChefHat className="w-6 h-6" />
+      {/* KDS Header Bar (Responsif Penuh Mobile & Tablet) */}
+      <header className="min-h-14 sm:h-16 px-2.5 sm:px-6 py-2 sm:py-0 bg-stone-900 border-b border-stone-800 flex items-center justify-between gap-1.5 sm:gap-2 shrink-0 w-full">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+            <ChefHat className="w-4 h-4 sm:w-6 sm:h-6" />
           </div>
 
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-1.5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h1 className="text-sm sm:text-lg font-black tracking-tight text-white flex items-center gap-1.5 leading-tight">
                 <span>DAPUR</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
-                  SES v4.5
-                </span>
               </h1>
-              <span className="text-xs text-stone-400 font-medium hidden md:inline">
+              <span className="text-[11px] sm:text-xs text-stone-400 font-medium truncate hidden sm:inline">
                 &bull; {workspaceName || workspaceSlug}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-[11px] text-stone-400">
+            <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] text-stone-400 leading-tight">
               {/* Sync Status Badge */}
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 shrink-0">
                 {syncStatus === 'CONNECTED' ? (
                   <>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-emerald-400 font-medium">Real-time Aktif</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-emerald-400 font-medium">Real-time</span>
                   </>
                 ) : syncStatus === 'SYNCING' ? (
                   <>
-                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                    <span className="text-amber-400 font-medium">Menyegerak...</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="text-amber-400 font-medium">Menyegerak</span>
                   </>
                 ) : (
                   <>
-                    <span className="w-2 h-2 rounded-full bg-rose-400" />
-                    <span className="text-rose-400 font-medium">Mod Sandaran Luar Talian</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                    <span className="text-rose-400 font-medium">Luar Talian</span>
                   </>
                 )}
               </div>
 
               <span className="text-stone-600">&bull;</span>
-              <span>Aktif: <strong className="text-white font-mono">{newTickets.length + preparingTickets.length}</strong></span>
+              <span className="truncate">Aktif: <strong className="text-white font-mono">{newTickets.length + preparingTickets.length}</strong></span>
             </div>
           </div>
         </div>
 
         {/* Header Action Controls */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* Station Filter (Optional) */}
           <div className="hidden lg:flex items-center bg-stone-950 p-1 rounded-xl border border-stone-800 text-xs">
             <button
@@ -380,13 +378,13 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
               if (next) KotService.playNewKotChime();
             }}
             title={soundEnabled ? 'Bunyi Notifikasi Aktif' : 'Bunyi Dimatikan'}
-            className={`w-10 h-10 rounded-xl border flex items-center justify-center transition cursor-pointer ${
+            className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl border flex items-center justify-center transition cursor-pointer shrink-0 ${
               soundEnabled
                 ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 hover:bg-amber-500/20'
                 : 'bg-stone-800 border-stone-700 text-stone-400 hover:text-stone-200'
             }`}
           >
-            {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+            {soundEnabled ? <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" /> : <VolumeX className="w-4 h-4 sm:w-5 sm:h-5" />}
           </button>
 
           {/* Refresh Button */}
@@ -395,9 +393,9 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
             id="kds-refresh-btn"
             onClick={handleManualRefresh}
             title="Muat Semula Tiket"
-            className="w-10 h-10 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-300 hover:text-white flex items-center justify-center transition cursor-pointer"
+            className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-300 hover:text-white flex items-center justify-center transition cursor-pointer shrink-0"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
 
           {/* History Button */}
@@ -405,11 +403,11 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
             type="button"
             id="kds-history-btn"
             onClick={() => setIsHistoryModalOpen(true)}
-            className="px-3 h-10 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 hover:text-white flex items-center gap-1.5 text-xs font-semibold transition cursor-pointer"
+            className="h-8 sm:h-10 px-2 sm:px-3 rounded-lg sm:rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 hover:text-white flex items-center gap-1 sm:gap-1.5 text-xs font-semibold transition cursor-pointer shrink-0"
           >
-            <History className="w-4 h-4 text-amber-400" />
+            <History className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
             <span className="hidden sm:inline">Sejarah</span>
-            <span className="px-1.5 py-0.5 rounded-full bg-stone-900 text-[10px] font-mono font-bold text-stone-300">
+            <span className="px-1.5 py-0.2 rounded-full bg-stone-900 text-[10px] font-mono font-bold text-stone-300">
               {archivedCount}
             </span>
           </button>
@@ -420,9 +418,9 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
             id="kds-fullscreen-toggle-btn"
             onClick={toggleFullscreen}
             title={isFullscreen ? 'Keluar Skrin Penuh' : 'Skrin Penuh Tablet'}
-            className="w-10 h-10 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-300 hover:text-white flex items-center justify-center transition cursor-pointer"
+            className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-300 hover:text-white flex items-center justify-center transition cursor-pointer shrink-0"
           >
-            {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+            {isFullscreen ? <Minimize className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Maximize className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
           </button>
 
           {/* Back to POS Button */}
@@ -431,9 +429,9 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
               type="button"
               id="kds-back-to-pos-btn"
               onClick={onBackToPos}
-              className="px-3 h-10 rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 hover:text-white flex items-center gap-1 text-xs font-semibold transition cursor-pointer"
+              className="h-8 sm:h-10 px-2 sm:px-3 rounded-lg sm:rounded-xl bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 hover:text-white flex items-center gap-1 text-xs font-semibold transition cursor-pointer shrink-0"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">Ke POS</span>
             </button>
           )}
@@ -444,9 +442,9 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
             id="kds-logout-btn"
             onClick={handleLogout}
             title="Log Keluar Dapur"
-            className="w-10 h-10 rounded-xl bg-rose-950/30 hover:bg-rose-900/50 border border-rose-800/40 text-rose-300 flex items-center justify-center transition cursor-pointer"
+            className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-rose-950/30 hover:bg-rose-900/50 border border-rose-800/40 text-rose-300 flex items-center justify-center transition cursor-pointer shrink-0"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
         </div>
       </header>
@@ -455,40 +453,114 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
       {isDefaultPinState && (
         <div
           id="kds-default-pin-warning-banner"
-          className="bg-amber-950/80 border-b border-amber-600/60 px-4 sm:px-6 py-2.5 text-amber-200 text-xs flex flex-wrap items-center justify-between gap-3 shadow-inner"
+          className="bg-amber-950/80 border-b border-amber-600/60 px-3 sm:px-6 py-2 text-amber-200 text-xs flex items-center justify-between gap-2 shadow-inner"
         >
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 min-w-0">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-            <span>
-              <strong>PIN Lalai (8888):</strong> Sila tukar PIN Dapur demi keselamatan operasi kedai.
+            <span className="text-[11px] sm:text-xs truncate">
+              <strong>PIN Lalai (8888):</strong> Sila tukar PIN Dapur.
             </span>
           </div>
           <button
             type="button"
             id="kds-change-pin-banner-btn"
             onClick={() => setIsChangePinModalOpen(true)}
-            className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-xl font-bold text-xs transition cursor-pointer shadow-md flex items-center gap-1.5"
+            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-lg font-bold text-[11px] sm:text-xs transition cursor-pointer shadow-md flex items-center gap-1 shrink-0 whitespace-nowrap"
           >
-            <Lock className="w-3.5 h-3.5" />
-            <span>Tukar PIN Dapur</span>
+            <Lock className="w-3 h-3" />
+            <span>Tukar PIN</span>
           </button>
         </div>
       )}
 
-      {/* Main KDS Grid: 3 Columns */}
-      <main className="flex-1 p-3 sm:p-5 grid grid-cols-1 md:grid-cols-3 gap-4 overflow-y-auto">
+      {/* Tab Penukar Kolum KDS untuk Skrin Mudah Alih (Mobile Friendly) */}
+      <div className="md:hidden px-2.5 sm:px-3 pt-2 pb-1.5 bg-stone-950 shrink-0 w-full border-b border-stone-800/80">
+        <div className="grid grid-cols-4 gap-1 p-1 bg-stone-900 border border-stone-800 rounded-xl">
+          <button
+            type="button"
+            id="kds-mobile-tab-all"
+            onClick={() => setMobileColumnTab('ALL')}
+            className={`py-2 px-1 rounded-lg text-xs font-bold transition flex flex-col items-center justify-center cursor-pointer ${
+              mobileColumnTab === 'ALL'
+                ? 'bg-stone-800 text-white shadow-xs'
+                : 'text-stone-400 hover:text-stone-200'
+            }`}
+          >
+            <span>Semua</span>
+            <span className="text-[10px] font-mono text-stone-300">
+              ({newTickets.length + preparingTickets.length + readyTickets.length})
+            </span>
+          </button>
+          <button
+            type="button"
+            id="kds-mobile-tab-new"
+            onClick={() => setMobileColumnTab('NEW')}
+            className={`py-2 px-1 rounded-lg text-xs font-bold transition flex flex-col items-center justify-center cursor-pointer ${
+              mobileColumnTab === 'NEW'
+                ? 'bg-amber-500 text-stone-950 shadow-xs'
+                : 'text-stone-400 hover:text-amber-400'
+            }`}
+          >
+            <span>Baru</span>
+            <span className="text-[10px] font-mono font-bold">
+              ({newTickets.length})
+            </span>
+          </button>
+          <button
+            type="button"
+            id="kds-mobile-tab-preparing"
+            onClick={() => setMobileColumnTab('PREPARING')}
+            className={`py-2 px-1 rounded-lg text-xs font-bold transition flex flex-col items-center justify-center cursor-pointer ${
+              mobileColumnTab === 'PREPARING'
+                ? 'bg-sky-600 text-white shadow-xs'
+                : 'text-stone-400 hover:text-sky-400'
+            }`}
+          >
+            <span>Sedia</span>
+            <span className="text-[10px] font-mono font-bold">
+              ({preparingTickets.length})
+            </span>
+          </button>
+          <button
+            type="button"
+            id="kds-mobile-tab-ready"
+            onClick={() => setMobileColumnTab('READY')}
+            className={`py-2 px-1 rounded-lg text-xs font-bold transition flex flex-col items-center justify-center cursor-pointer ${
+              mobileColumnTab === 'READY'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-stone-400 hover:text-emerald-400'
+            }`}
+          >
+            <span>Siap</span>
+            <span className="text-[10px] font-mono font-bold">
+              ({readyTickets.length})
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main KDS Grid: 3 Columns (Paparan Penuh & Responsif Mobile) */}
+      <main
+        className={`flex-1 p-2.5 sm:p-5 overflow-y-auto min-h-0 w-full ${
+          mobileColumnTab === 'ALL'
+            ? 'grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4'
+            : 'flex flex-col md:grid md:grid-cols-3 gap-3 sm:gap-4'
+        }`}
+      >
         {/* ======================================================== */}
         {/* COLUMN 1: BARU (NEW) */}
         {/* ======================================================== */}
         <section
           id="kds-column-new"
-          className="flex flex-col bg-stone-900/60 border border-stone-800 rounded-3xl overflow-hidden shadow-xl"
+          className={`flex flex-col bg-stone-900/70 border border-stone-800 rounded-2xl md:rounded-3xl overflow-hidden shadow-xl w-full ${
+            mobileColumnTab === 'ALL' || mobileColumnTab === 'NEW' ? 'flex' : 'hidden md:flex'
+          } ${mobileColumnTab !== 'ALL' ? 'flex-1 h-full min-h-0' : ''}`}
         >
           {/* Column Header */}
-          <div className="px-4 py-3.5 bg-amber-950/40 border-b border-amber-900/50 flex items-center justify-between">
+          <div className="px-3.5 sm:px-4 py-3 sm:py-3.5 bg-amber-950/40 border-b border-amber-900/50 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
-              <h2 className="text-sm font-black text-amber-300 tracking-wider uppercase">
+              <h2 className="text-xs sm:text-sm font-black text-amber-300 tracking-wider uppercase">
                 Pesanan Baru
               </h2>
             </div>
@@ -498,9 +570,9 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
           </div>
 
           {/* Tickets List */}
-          <div className="flex-1 p-3 space-y-3 overflow-y-auto min-h-[300px]">
+          <div className="flex-1 p-2.5 sm:p-3 space-y-3 overflow-y-auto min-h-0">
             {newTickets.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-stone-600 text-xs py-16">
+              <div className="h-full flex-1 flex flex-col items-center justify-center text-stone-600 text-xs py-12">
                 <ChefHat className="w-10 h-10 mb-2 opacity-30" />
                 <span>Tiada pesanan baru saat ini.</span>
               </div>
@@ -533,13 +605,15 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
         {/* ======================================================== */}
         <section
           id="kds-column-preparing"
-          className="flex flex-col bg-stone-900/60 border border-stone-800 rounded-3xl overflow-hidden shadow-xl"
+          className={`flex flex-col bg-stone-900/70 border border-stone-800 rounded-2xl md:rounded-3xl overflow-hidden shadow-xl w-full ${
+            mobileColumnTab === 'ALL' || mobileColumnTab === 'PREPARING' ? 'flex' : 'hidden md:flex'
+          } ${mobileColumnTab !== 'ALL' ? 'flex-1 h-full min-h-0' : ''}`}
         >
           {/* Column Header */}
-          <div className="px-4 py-3.5 bg-sky-950/40 border-b border-sky-900/50 flex items-center justify-between">
+          <div className="px-3.5 sm:px-4 py-3 sm:py-3.5 bg-sky-950/40 border-b border-sky-900/50 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-pulse" />
-              <h2 className="text-sm font-black text-sky-300 tracking-wider uppercase">
+              <h2 className="text-xs sm:text-sm font-black text-sky-300 tracking-wider uppercase">
                 Sedang Disediakan
               </h2>
             </div>
@@ -549,9 +623,9 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
           </div>
 
           {/* Tickets List */}
-          <div className="flex-1 p-3 space-y-3 overflow-y-auto min-h-[300px]">
+          <div className="flex-1 p-2.5 sm:p-3 space-y-3 overflow-y-auto min-h-0">
             {preparingTickets.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-stone-600 text-xs py-16">
+              <div className="h-full flex-1 flex flex-col items-center justify-center text-stone-600 text-xs py-12">
                 <Flame className="w-10 h-10 mb-2 opacity-30" />
                 <span>Tiada pesanan sedang dimasak.</span>
               </div>
@@ -584,13 +658,15 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
         {/* ======================================================== */}
         <section
           id="kds-column-ready"
-          className="flex flex-col bg-stone-900/60 border border-stone-800 rounded-3xl overflow-hidden shadow-xl"
+          className={`flex flex-col bg-stone-900/70 border border-stone-800 rounded-2xl md:rounded-3xl overflow-hidden shadow-xl w-full ${
+            mobileColumnTab === 'ALL' || mobileColumnTab === 'READY' ? 'flex' : 'hidden md:flex'
+          } ${mobileColumnTab !== 'ALL' ? 'flex-1 h-full min-h-0' : ''}`}
         >
           {/* Column Header */}
-          <div className="px-4 py-3.5 bg-emerald-950/40 border-b border-emerald-900/50 flex items-center justify-between">
+          <div className="px-3.5 sm:px-4 py-3 sm:py-3.5 bg-emerald-950/40 border-b border-emerald-900/50 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-              <h2 className="text-sm font-black text-emerald-300 tracking-wider uppercase">
+              <h2 className="text-xs sm:text-sm font-black text-emerald-300 tracking-wider uppercase">
                 Siap Dihidang
               </h2>
             </div>
@@ -600,9 +676,9 @@ export const KitchenDisplayView: React.FC<KitchenDisplayViewProps> = ({
           </div>
 
           {/* Tickets List */}
-          <div className="flex-1 p-3 space-y-3 overflow-y-auto min-h-[300px]">
+          <div className="flex-1 p-2.5 sm:p-3 space-y-3 overflow-y-auto min-h-0">
             {readyTickets.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-stone-600 text-xs py-16">
+              <div className="h-full flex-1 flex flex-col items-center justify-center text-stone-600 text-xs py-12">
                 <CheckCircle2 className="w-10 h-10 mb-2 opacity-30" />
                 <span>Tiada pesanan menunggu untuk diambil / dihantar.</span>
               </div>
