@@ -50,6 +50,7 @@ export interface KitchenAuthSession {
 export interface MasterAdminAuthSession {
   token: string;
   role: 'MASTER_ADMIN';
+  email?: string;
   expiresAt: number;
 }
 

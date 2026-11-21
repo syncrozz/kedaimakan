@@ -7,6 +7,7 @@ import {
   changeKitchenPin,
   getKitchenPublicAuthState,
   authenticateMasterAdmin,
+  authenticateMasterAdminGoogle,
   changeClientPin,
   adminResetClientPin,
   initWorkspaceAuth,
@@ -449,17 +450,17 @@ async function startServer() {
   // MASTER ADMIN AUTHENTICATION & MANAGEMENT
   // ----------------------------------------------------
 
-  // Master Admin login (PIN 5313 exclusively)
-  app.post('/api/auth/admin/login', (req: Request, res: Response) => {
-    const { pin } = req.body || {};
-    if (!pin) {
-      res.status(400).json({ success: false, error: 'PIN Master Admin diperlukan.' });
+  // Master Admin login with Google (allowlist: khaikerr@gmail.com)
+  app.post('/api/auth/admin/google-login', async (req: Request, res: Response) => {
+    const { idToken, email } = req.body || {};
+    if (!idToken) {
+      res.status(400).json({ success: false, error: 'Token Google diperlukan.' });
       return;
     }
 
-    const result = authenticateMasterAdmin(pin);
+    const result = await authenticateMasterAdminGoogle(idToken, email);
     if (!result.success) {
-      res.status(result.remainingSeconds ? 429 : 401).json(result);
+      res.status(401).json(result);
       return;
     }
 

@@ -45,9 +45,9 @@ import { ManageSubscriptionModal } from '../components/admin/ManageSubscriptionM
 import { AuditLogsModal } from '../components/admin/AuditLogsModal';
 import { DemoResetConfirmModal } from '../components/demo/DemoResetConfirmModal';
 import { DemoVerificationModal } from '../components/admin/DemoVerificationModal';
-import { useStore } from '../context/StoreContext';
 import type { Workspace, ClientAccessDetails } from '../types/workspace';
 import type { AuditLogRecord } from '../types/auth';
+import { GoogleAuthService } from '../services/googleAuthService';
 
 interface MasterAdminPageProps {
   onExitAdmin?: () => void;
@@ -58,13 +58,11 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
   onExitAdmin,
   onSelectWorkspace,
 }) => {
-  const { isAdminMode } = useStore();
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return Boolean(isAdminMode) || Boolean(ClientAuthService.getMasterAdminSession());
+    return Boolean(ClientAuthService.getMasterAdminSession());
   });
-  const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
-  const [isVerifyingPin, setIsVerifyingPin] = useState(false);
+  const [isVerifyingGoogle, setIsVerifyingGoogle] = useState(false);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -114,23 +112,27 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
     }
   }, [isAuthenticated]);
 
-  const handlePinSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleGoogleLogin = async () => {
     setPinError(null);
-    setIsVerifyingPin(true);
+    setIsVerifyingGoogle(true);
 
     try {
-      const res = await ClientAuthService.adminLogin(pinInput);
+      const { user, idToken } = await GoogleAuthService.signIn();
+      const res = await ClientAuthService.adminLoginWithGoogle(idToken, user.email || '');
       if (res.success) {
         setIsAuthenticated(true);
-        setPinInput('');
       } else {
-        setPinError(res.error || 'PIN Master Admin tidak sah.');
+        setPinError(res.error || 'Akaun Google tidak dibenarkan.');
+        await GoogleAuthService.signOut().catch(() => {});
       }
-    } catch {
-      setPinError('Ralat pengesahan PIN.');
+    } catch (err: any) {
+      setPinError(
+        err?.code === 'auth/popup-closed-by-user'
+          ? 'Tetingkap Google ditutup sebelum log masuk selesai.'
+          : err?.message || 'Gagal membuka log masuk Google.'
+      );
     } finally {
-      setIsVerifyingPin(false);
+      setIsVerifyingGoogle(false);
     }
   };
 
@@ -269,7 +271,7 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
     }
   };
 
-  // PIN Login View
+  // Google Login View
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center p-4">
@@ -284,61 +286,35 @@ export const MasterAdminPage: React.FC<MasterAdminPageProps> = ({
             </p>
           </div>
 
-          <form onSubmit={handlePinSubmit} className="space-y-4">
+          <div className="space-y-4">
             {pinError && (
               <div className="p-3 rounded-xl bg-red-950/50 border border-red-800/60 text-red-300 text-xs flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>{pinError}</span>
               </div>
             )}
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-stone-300 block text-center">
-                Masukkan 4-Digit Nombor PIN Keselamatan
-              </label>
-              <input
-                id="master-admin-pin-input"
-                type="password"
-                maxLength={4}
-                autoFocus
-                placeholder="••••"
-                value={pinInput}
-                disabled={isVerifyingPin}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, '').slice(0, 4);
-                  setPinInput(val);
-                  setPinError(null);
-                  if (val.length === 4) {
-                    setIsVerifyingPin(true);
-                    ClientAuthService.adminLogin(val)
-                      .then((res) => {
-                        if (res.success) {
-                          setIsAuthenticated(true);
-                          setPinInput('');
-                        } else {
-                          setPinError(res.error || 'PIN Master Admin tidak sah. Sila cuba lagi.');
-                        }
-                      })
-                      .finally(() => setIsVerifyingPin(false));
-                  }
-                }}
-                className="w-full text-center text-2xl tracking-[0.6em] font-mono bg-stone-950 border border-stone-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl py-3 text-white outline-none transition-all"
-              />
-            </div>
-
             <button
-              id="master-admin-login-btn"
-              type="submit"
-              disabled={isVerifyingPin || pinInput.length < 4}
-              className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-xs transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+              id="master-admin-google-login-btn"
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={isVerifyingGoogle}
+              className="w-full py-3 rounded-xl bg-white hover:bg-stone-100 disabled:opacity-50 text-stone-900 font-semibold text-sm transition-colors shadow-sm flex items-center justify-center gap-3 cursor-pointer"
             >
-              {isVerifyingPin ? (
-                <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              {isVerifyingGoogle ? (
+                <div className="w-4 h-4 border-2 border-stone-400 border-t-stone-900 rounded-full animate-spin" />
               ) : (
-                <span>Log Masuk ke Konsol Pentadbir</span>
+                <>
+                  <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
+                    <path fill="#4285F4" d="M21.35 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.24a4.48 4.48 0 0 1-1.95 2.94v2.52h3.15c1.84-1.7 2.91-4.2 2.91-7.29z" />
+                    <path fill="#34A853" d="M12 21.7c2.63 0 4.84-.87 6.45-2.36l-3.15-2.52c-.87.58-1.99.93-3.3.93-2.54 0-4.69-1.72-5.46-4.03H3.28v2.58A9.8 9.8 0 0 0 12 21.7z" />
+                    <path fill="#FBBC05" d="M6.54 13.72A5.9 5.9 0 0 1 6.23 12c0-.6.11-1.18.31-1.72V7.7H3.28A9.75 9.75 0 0 0 2.2 12c0 1.58.38 3.07 1.08 4.3l3.26-2.58z" />
+                    <path fill="#EA4335" d="M12 6.25c1.43 0 2.71.49 3.72 1.45l2.79-2.79A9.41 9.41 0 0 0 12 2.3a9.8 9.8 0 0 0-8.72 5.4l3.26 2.58C7.31 7.97 9.46 6.25 12 6.25z" />
+                  </svg>
+                  <span>Teruskan dengan Google</span>
+                </>
               )}
             </button>
-          </form>
+          </div>
 
           <div className="text-center pt-2">
             <button

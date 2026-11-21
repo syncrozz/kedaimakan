@@ -616,6 +616,31 @@ export class ClientAuthService {
     return { success: false, error: 'PIN Pentadbir tidak sah.' };
   }
 
+  public static async adminLoginWithGoogle(
+    idToken: string,
+    email: string
+  ): Promise<AuthResponse<MasterAdminAuthSession>> {
+    const res = await safeFetchJson<{
+      success: boolean;
+      session?: MasterAdminAuthSession;
+      error?: string;
+    }>('/api/auth/admin/google-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken, email }),
+    });
+
+    if (res.isJson && res.data?.success && res.data.session) {
+      this.saveMasterAdminSession(res.data.session);
+      return { success: true, data: res.data.session };
+    }
+
+    return {
+      success: false,
+      error: res.isJson ? res.data?.error || 'Akaun Google tidak dibenarkan.' : 'Gagal menghubungi pelayan pengesahan.',
+    };
+  }
+
   public static async adminResetClientPin(workspaceIdOrSlug: string): Promise<AuthResponse> {
     const adminSession = this.getMasterAdminSession();
     if (!adminSession) {

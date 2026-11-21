@@ -659,6 +659,81 @@ export function authenticateMasterAdmin(
 }
 
 /**
+ * Authenticates a Firebase Google user and restricts Master Admin access
+ * to the configured account.
+ */
+export async function authenticateMasterAdminGoogle(
+  idToken: string,
+  claimedEmail?: string
+): Promise<{ success: boolean; session?: MasterAdminAuthSession; error?: string }> {
+  const allowedEmail = (process.env.MASTER_ADMIN_EMAIL || 'khaikerr@gmail.com').trim().toLowerCase();
+  const cleanClaimedEmail = (claimedEmail || '').trim().toLowerCase();
+
+  try {
+    const apiKey =
+      process.env.VITE_FIREBASE_API_KEY ||
+      process.env.FIREBASE_API_KEY ||
+      'AIzaSyBfE2839sxH9dU87xIVm6JkYmo7XAIZHTI';
+
+    const response = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      }
+    );
+    const data = await response.json() as {
+      users?: Array<{ email?: string; emailVerified?: boolean }>;
+    };
+
+    if (!response.ok || !data.users?.length) {
+      return { success: false, error: 'Token Google tidak sah atau telah tamat tempoh.' };
+    }
+
+    const googleUser = data.users[0];
+    const verifiedEmail = (googleUser.email || '').trim().toLowerCase();
+    if (
+      !googleUser.emailVerified ||
+      verifiedEmail !== allowedEmail ||
+      (cleanClaimedEmail && cleanClaimedEmail !== verifiedEmail)
+    ) {
+      return { success: false, error: 'Akaun Google ini tidak dibenarkan sebagai Master Admin.' };
+    }
+
+    clearLockout('master_admin');
+    const expiresAt = Date.now() + 8 * 60 * 60 * 1000;
+    const token = generateToken({
+      role: 'MASTER_ADMIN',
+      email: verifiedEmail,
+      exp: expiresAt,
+    });
+
+    recordAuditLog({
+      action: 'MASTER_ADMIN_LOGIN',
+      performedBy: 'MASTER_ADMIN',
+      details: {
+        authenticatedAt: new Date().toISOString(),
+        authMethod: 'GOOGLE',
+        email: verifiedEmail,
+      },
+    });
+
+    return {
+      success: true,
+      session: {
+        token,
+        role: 'MASTER_ADMIN',
+        email: verifiedEmail,
+        expiresAt,
+      },
+    };
+  } catch {
+    return { success: false, error: 'Ralat semasa mengesahkan akaun Google.' };
+  }
+}
+
+/**
  * Master Admin resets a client's PIN back to default (1234).
  * Enforces audit trail and never reveals client's existing PIN.
  */
